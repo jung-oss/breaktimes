@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/event_bus.dart';
@@ -22,9 +25,22 @@ class LocaleProvider with ChangeNotifier {
 
   final TopicService _topicService = TopicService();
 
+  // 오늘의 질문은 사용자마다 다르므로, 계정이 바뀌면 다시 불러옵니다
+  StreamSubscription<User?>? _authSubscription;
+  String? _topicUid;
+
   LocaleProvider() {
     _locale = const Locale('ko');
+    _topicUid = FirebaseAuth.instance.currentUser?.uid;
     _initializeLocaleAndTopic();
+    _authSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+      final uid = user?.uid;
+      if (uid == _topicUid) return;
+      _topicUid = uid;
+      Logger.info('LocaleProvider: 계정이 바뀌어 오늘의 질문을 다시 불러옵니다');
+      _loadDailyTopic(forceReload: true);
+    });
   }
 
   // Getters
@@ -329,6 +345,7 @@ class LocaleProvider with ChangeNotifier {
   @override
   void dispose() {
     // TopicService 정리는 필요 없음 (싱글톤)
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

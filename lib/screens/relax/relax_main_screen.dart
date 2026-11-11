@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/unified_entry_card.dart';
 import '../../models/mood_models.dart';
 import '../../providers/theme_provider.dart';
+import '../../happiness_shop_2/common/services/heart_service.dart';
 
 class RelaxMainScreen extends StatefulWidget {
   const RelaxMainScreen({super.key});
@@ -758,13 +759,29 @@ class _WriteEntryModalState extends State<WriteEntryModal> {
         });
 
         if (success) {
+          // 창을 닫아도 알림을 띄울 수 있도록 미리 잡아 둡니다
+          final messenger = ScaffoldMessenger.of(context);
+          final isKo = AppLocalizations.of(context).localeName.startsWith('ko');
+
           // Close modal and show success message
           Navigator.of(context).pop(true);
           _showSnackBar(
-            AppLocalizations.of(context).localeName.startsWith('ko')
-                ? '감정이 기록되었습니다'
-                : 'Emotion recorded successfully',
+            isKo ? '감정이 기록되었습니다' : 'Emotion recorded successfully',
           );
+
+          // 행복-함 작성 보상: 사랑하기 1개 (하루 한 번)
+          HeartService()
+              .awardDailyHeart(HeartReward.happyBox)
+              .then((awarded) {
+            if (!awarded) return;
+            messenger.showSnackBar(
+              SnackBar(
+                content: Text(isKo
+                    ? '행복-함 작성! 사랑하기 1개를 받았어요 ❤'
+                    : 'Happy Box written! You got 1 Love ❤'),
+              ),
+            );
+          });
         } else {
           _showSnackBar(
             AppLocalizations.of(context).localeName.startsWith('ko')

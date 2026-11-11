@@ -7,6 +7,7 @@ import 'todo_analysis_screen.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/localization/app_localizations.dart';
 import '../../utils/firestore_paths.dart';
+import '../../happiness_shop_2/common/services/heart_service.dart';
 
 class TodoMainScreen extends StatefulWidget {
   const TodoMainScreen({super.key});
@@ -468,6 +469,11 @@ class _TodoMainScreenState extends State<TodoMainScreen>
       if (newIsCompleted) {
         _initializeAnimationController(todo.id);
         _playCompletionAnimation(todo.id);
+
+        // 오늘 미션을 모두 완료(100%)하면 사랑하기 1개 지급 (하루 한 번)
+        if (_todos.isNotEmpty && _todos.every((t) => t.isCompleted)) {
+          _awardMissionHeart();
+        }
       }
 
       // 진행 상황 업데이트
@@ -523,6 +529,22 @@ class _TodoMainScreenState extends State<TodoMainScreen>
                     : 'An error occurred: $e')),
       );
     }
+  }
+
+  Future<void> _awardMissionHeart() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isKo = AppLocalizations.of(context).localeName.startsWith('ko');
+
+    final awarded = await HeartService().awardDailyHeart(HeartReward.mission);
+    if (!awarded) return;
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(isKo
+            ? '오늘의 행복-미션 100% 달성! 사랑하기 1개를 받았어요 ❤'
+            : 'All missions done! You got 1 Love ❤'),
+      ),
+    );
   }
 
   double _calculateHappinessScore(int completed, int total, String mood) {

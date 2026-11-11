@@ -35,7 +35,8 @@ class TopicService {
   // ============================================================================
 
   // 메모리 최적화
-  static const int topicPoolSize = 50; // 200 → 50 (메모리 75% 절약)
+  // 등록된 질문을 모두 쓰도록 넉넉히 둡니다 (이전 50개 제한 해제, 안전 상한 1000개)
+  static const int topicPoolSize = 1000;
   static const int weeklyPreloadDays = 5; // 7 → 5 (메모리 절약)
   static const int maxRetryCount = 2; // 3 → 2 (빠른 포기)
 
@@ -70,6 +71,9 @@ class TopicService {
   static const String keyUsedTopicsBitmap = 'used_topics_bitmap_v4';
   static const String keyTopicsFingerprint = 'topics_fingerprint_v4';
   static const String keyRotationResetDate = 'rotation_reset_date_v4';
+
+  // 오늘 질문 캐시가 어느 계정의 것인지
+  static const String keyTopicCacheUid = 'topic_cache_uid_v1';
 
   // ============================================================================
   // 메모리 캐시 변수들
@@ -123,6 +127,9 @@ class TopicService {
       final String language =
           locale?.split('_')[0] ?? 'ko'; // language 변수 정의 수정
       final today = _getTodayString();
+
+      // 다른 계정으로 바뀌었으면 앞 사람의 오늘 질문 캐시를 비웁니다
+      await _resetCachesIfUserChanged();
 
       // 🔧 즉시 메인 스레드 양보 (프레임 스킵 방지)
       await Future.delayed(Duration.zero);
@@ -223,6 +230,22 @@ class TopicService {
       }
     }
 
+    // 로그인한 사용자: 사용자별로 겹치지 않는 무작위 질문 (기록은 파이어스토어)
+    final uid = _auth.currentUser?.uid;
+    if (uid != null) {
+      final userTopic = await _selectTopicForUser(uid, today);
+      if (userTopic != null) {
+        final topicId = userTopic['id'] as String;
+        final content = _getLocalizedContent(userTopic, language);
+        Logger.info('TopicService: 사용자별 질문 선택 - $content (ID: $topicId)');
+        _recordTopicUsageSync(today, topicId);
+        return {'content': content, 'topicId': topicId};
+      }
+    }
+
+    // 아래는 로그인 전이거나 서버에 닿지 못할 때 쓰는 기기 기록 방식입니다
+    final userSalt = _stableHash(uid ?? '');
+
     // 사용 이력이 로드되었는지 확인 (null 체크 강화)
     await _ensureUsedTopicsLoaded();
     if (_usedTopicIds == null) {
@@ -237,7 +260,7 @@ class TopicService {
     String selectionReason;
 
     if (availableTopics.isNotEmpty) {
-      final dateHash = _generateDateHash(today);
+      final dateHash = _generateDateHash(today) ^ userSalt;
       final index = dateHash % availableTopics.length;
       selectedTopic = availableTopics[index];
       selectionReason =
@@ -246,7 +269,7 @@ class TopicService {
       Logger.info('TopicService: 모든 주제 사용됨, 스마트 순환 재시작');
       await _handleFullRotationCompleted(today);
 
-      final dateHash = _generateDateHash(today);
+      final dateHash = _generateDateHash(today) ^ userSalt;
       final index = dateHash % _topicPool!.length;
       selectedTopic = _topicPool![index];
       selectionReason = '순환 완료 후 재선택';
@@ -1042,6 +1065,123 @@ class TopicService {
     }
 
     return buffer.toString().hashCode.toString();
+  }
+
+  // ============================================================================
+  // 사용자별 질문 순환
+  // ============================================================================
+
+  /// 사용자마다 겹치지 않는 무작위 질문을 고릅니다.
+  ///
+  /// `users/{uid}.topicRotation`에 오늘 날짜·질문 ID·받은 질문 목록을 기록합니다.
+  /// - 같은 날에는 어느 기기에서든 같은 질문을 돌려줍니다.
+  /// - 모든 질문을 한 번씩 받기 전에는 반복하지 않습니다.
+  /// - 한 바퀴를 다 돌면 새로 섞어 시작하되, 어제 질문은 바로 다시 내지 않습니다.
+  /// 서버에 닿지 못하면 null을 돌려주고, 호출한 쪽이 기기 기록 방식으로 고릅니다.
+  Future<Map<String, dynamic>?> _selectTopicForUser(
+      String uid, String today) async {
+    final pool = _topicPool;
+    if (pool == null || pool.isEmpty) return null;
+
+    Map<String, dynamic>? findTopic(Object? id) {
+      if (id is! String) return null;
+      for (final t in pool) {
+        if (t['id'] == id) return t;
+      }
+      return null;
+    }
+
+    try {
+      final userRef = _firestore.collection('users').doc(uid);
+
+      final pickedId = await _firestore.runTransaction<String?>((tx) async {
+        final snap = await tx.get(userRef);
+        if (!snap.exists) return null;
+
+        final raw = snap.data()?['topicRotation'];
+        final rotation = raw is Map ? raw : const {};
+
+        // 오늘 이미 고른 질문이 있으면 그대로 씁니다
+        if (rotation['date'] == today && findTopic(rotation['topicId']) != null) {
+          return rotation['topicId'] as String;
+        }
+
+        final poolIds = pool.map((t) => t['id'] as String).toList()..sort();
+        final used = <String>{
+          ...((rotation['usedIds'] as List?) ?? const []).whereType<String>(),
+        }..retainWhere(poolIds.contains); // 지금은 없는 질문 기록은 정리
+        var cycle = (rotation['cycle'] as num?)?.toInt() ?? 0;
+
+        var available = poolIds.where((id) => !used.contains(id)).toList();
+        if (available.isEmpty) {
+          // 한 바퀴를 다 돌았으면 새로 시작합니다
+          used.clear();
+          cycle++;
+          final lastId = rotation['topicId'];
+          available = poolIds.where((id) => id != lastId).toList();
+          if (available.isEmpty) available = poolIds;
+        }
+
+        // 사용자·날짜·바퀴 수로 정해지는 무작위 값이라 다시 불러도 결과가 같습니다
+        final random = math.Random(_stableHash('$uid|$today|$cycle'));
+        final id = available[random.nextInt(available.length)];
+        used.add(id);
+
+        tx.set(
+          userRef,
+          {
+            'topicRotation': {
+              'date': today,
+              'topicId': id,
+              'usedIds': used.toList(),
+              'cycle': cycle,
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+          },
+          SetOptions(merge: true),
+        );
+        return id;
+      }).timeout(const Duration(seconds: 8));
+
+      return findTopic(pickedId);
+    } catch (e) {
+      Logger.info('TopicService: 사용자별 질문 선택 실패, 기기 기록 방식 사용 - $e');
+      return null;
+    }
+  }
+
+  /// 기기에 남은 오늘 질문 캐시가 다른 계정의 것이면 비웁니다.
+  Future<void> _resetCachesIfUserChanged() async {
+    final uid = _auth.currentUser?.uid ?? '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(keyTopicCacheUid) == uid) return;
+
+      _cachedTopicId = null;
+      _cachedTopicKo = null;
+      _cachedTopicEn = null;
+      _topicCacheTime = null;
+      _weeklyTopicsCache = null;
+
+      await Future.wait([
+        prefs.remove(keyWeeklyTopics),
+        prefs.remove(keyTopicUsed),
+        prefs.setString(keyTopicCacheUid, uid),
+      ]);
+      Logger.debug('TopicService: 계정이 바뀌어 오늘 질문 캐시를 비웠습니다');
+    } catch (e) {
+      Logger.info('TopicService: 계정 확인 실패 - $e');
+    }
+  }
+
+  /// 기기·실행마다 달라지지 않는 문자열 해시 (FNV-1a 32비트)
+  int _stableHash(String input) {
+    var hash = 0x811c9dc5;
+    for (final unit in utf8.encode(input)) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash & 0x7fffffff;
   }
 
   /// 날짜 해시 생성
