@@ -131,7 +131,6 @@ flutter:
   
   assets:
     - lib/l10n/
-    - .env
     - assets/images/
     - assets/images/tutorial/
     - assets/images/pill/

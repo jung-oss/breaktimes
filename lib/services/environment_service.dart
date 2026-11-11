@@ -192,8 +192,8 @@ class EnvironmentService {
       }
     }
 
-    // 3. 로컬 .env에서 확인
-    final localValue = dotenv.env[key];
+    // 3. 로컬 .env에서 확인 (.env는 앱에 넣지 않으므로 대개 읽히지 않습니다)
+    final localValue = dotenv.isInitialized ? dotenv.env[key] : null;
     if (localValue != null && localValue.isNotEmpty) {
       return localValue;
     }
