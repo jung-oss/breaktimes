@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Break time</string>
+    <string name="default_notification_channel_id">happy_notification_channel</string>
+    <string name="google_client_id">270367364115-enbga2bd0dec8l0p5imj0hgi737h2egt.apps.googleusercontent.com</string>
+</resources> 

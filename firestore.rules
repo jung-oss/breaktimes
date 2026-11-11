@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 인증 여부 확인 함수
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 문서 소유자 확인 함수
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // 관리자 확인 함수 - 특정 이메일 주소를 가진 사용자만 관리자 권한 부여
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == 'mainasv@naver.com' || 
+        request.auth.token.email == 'inlover78@naver.com'
+      );
+    }
+    
+    // 역할 기반 관리자 확인 함수
+    function hasAdminRole(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) &&
+             get(/databases/$(database)/documents/users/$(uid)).data.role == 'admin';
+    }
+    
+    // 좋아요 관련 업데이트 여부 확인 함수
+    function isLikeUpdate(oldData, newData) {
+      // likeCount 필드만 변경되는 것을 확인
+      return oldData.likeCount != newData.likeCount && 
+             // 다른 필드는 변경되지 않음을 확인
+             oldData.content == newData.content &&
+             oldData.userId == newData.userId &&
+             oldData.mood == newData.mood &&
+             oldData.isPublic == newData.isPublic;
+    }
+    
+    // 앱 설정 - 모든 사용자가 읽기 가능, 관리자만 쓰기 가능
+    match /app_configs/{document} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // 기본 설정: 모든 문서에 대해 기본적으로 접근 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // 사용자 컬렉션 규칙
+    match /users/{userId} {
+      // 자신의 프로필은 읽고 쓸 수 있음
+      allow read, write: if isOwner(userId);
+      
+      // kakaoId로 검색할 때는 인증된 모든 사용자가 읽을 수 있음 (카카오 로그인용)
+      allow read: if isAuthenticated();
+      
+      // 하위 컬렉션들
+      match /moods/{moodId} {
+        // 사용자는 자신의 감정 기록을 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /todos/{todoId} {
+        // 사용자는 자신의 할 일을 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /progress/{date} {
+        // 사용자는 자신의 진행 상황을 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /likes/{entryId} {
+        // 사용자는 자신의 좋아요 정보를 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /bookmarks/{entryId} {
+        // 사용자는 자신의 북마크 정보를 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /used_topics/{date} {
+        // 사용자는 자신이 사용한 주제 기록을 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      match /settings/{settingId} {
+        // 사용자는 자신의 설정을 읽고 쓸 수 있음
+        allow read, write: if isOwner(userId);
+      }
+      
+      // 사용자별 선호도 설정
+      match /preferences/{document=**} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+    }
+    
+    // 공개 엔트리 컬렉션 (모든 사용자가 읽기 가능)
+    match /publicEntries/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+    
+    // 주제 컬렉션 (모든 사용자가 읽기 가능, 관리자만 쓰기 가능)
+    match /topics/{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

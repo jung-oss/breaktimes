@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 15 (API 35) Edge-to-Edge 다크 모드 최적화 테마 -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:forceDarkAllowed">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <!-- Edge-to-Edge 모드를 위한 투명 시스템 바 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- 시스템 바 배경 그리기 비활성화 -->
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
+        <!-- 다크 모드 스플래시 화면 설정 -->
+        <item name="android:windowSplashScreenBackground">#121212</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/android12splash</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">#121212</item>
+    </style>
+    
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <!-- Edge-to-Edge에 최적화된 투명 배경 -->
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">false</item>
+    </style>
+</resources> 

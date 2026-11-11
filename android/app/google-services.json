@@ -1,0 +1,70 @@
+{
+  "project_info": {
+    "project_number": "239335834410",
+    "project_id": "breaktime-e7483",
+    "storage_bucket": "breaktime-e7483.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:239335834410:android:0e5a03006dd508d8891453",
+        "android_client_info": {
+          "package_name": "com.gemma.breaktimes.breaktimes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "239335834410-3434p1sobvma4sv4u73npop086oiaj1c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gemma.breaktimes.breaktimes",
+            "certificate_hash": "c26c3aa4de1fbe991f95e2ddf0aac754a21479f2"
+          }
+        },
+        {
+          "client_id": "239335834410-r4qndqdjtd6e02bhpdhhavrlfcnt9jq4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gemma.breaktimes.breaktimes",
+            "certificate_hash": "97f215001e52d176bfb0a77ff4110ec86c380a08"
+          }
+        },
+        {
+          "client_id": "239335834410-v1n2mg2acj94imp40be5ev9do1e8kt7i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.gemma.breaktimes.breaktimes",
+            "certificate_hash": "329e5b15be5a1fa64bfb39e73f1a2530a341eefb"
+          }
+        },
+        {
+          "client_id": "239335834410-sbr1mcmdn77f23kj1sb2beeil21gfm4d.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEkhNctAbGXHDeQfAK340lUND4n5B_Qg4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "239335834410-sbr1mcmdn77f23kj1sb2beeil21gfm4d.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "239335834410-j7h16v8bua403sood5hn75b3v7a9bvas.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.gemma.breaktimes.breaktimes"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

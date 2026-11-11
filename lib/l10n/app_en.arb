@@ -1,0 +1,137 @@
+{
+  "@@locale": "en",
+  "appTitle": "Happy Day",
+  "welcomeMessage": "Welcome!",
+  
+  "appName": "Break Time",
+  "todayTasks": "Happy mission",
+  "todayRest": "Happy Box",
+  "settings": "Settings",
+  "signIn": "Sign In",
+  "signUp": "Sign Up",
+  "logout": "Logout",
+  "welcome": "Welcome",
+  "email": "Email",
+  "password": "Password",
+  "confirmPassword": "Confirm Password",
+  "forgotPassword": "Forgot Password",
+  "createAccount": "Create Account",
+  "haveAccount": "Already have an account?",
+  "continue_with_google": "Continue with Google",
+  "continue_with_kakao": "Continue with Kakao",
+  "error": "Error",
+  "success": "Success",
+  "cancel": "Cancel",
+  "confirm": "Confirm",
+  "save": "Save",
+  "delete": "Delete",
+  "edit": "Edit",
+  
+  "enterEmailForPasswordReset": "Enter your email for password reset",
+  "invalidEmailFormat": "Invalid email format",
+  "passwordResetEmailSent": "Password reset email has been sent",
+  "send": "Send",
+  
+  "languageSettings": "Language Settings",
+  "languageSettingsDescription": "Select the language to use in the app. Changing the language will also update today's topic.",
+  "languageChangeNotice": "Notice",
+  "languageChangeDescription": "When you change the language:\n• App interface will change to the selected language\n• Today's topic will be automatically updated to the new language\n• Settings will be saved automatically",
+  "languageChanging": "Changing language and updating today's topic...",
+  "languageChangedToEnglish": "Changed to English",
+  "languageChangeFailed": "Failed to change language",
+  "currentTodaysTopic": "Current Today's Topic",
+  "loadingTopic": "Loading topic...",
+  
+  "darkMode": "Dark Mode",
+  "lightMode": "Light Mode",
+  "korean": "Korean",
+  "english": "English",
+  "notificationSettings": "Notification Settings",
+  "receiveNotifications": "Receive Notifications",
+  "notificationFrequency": "Notification Frequency",
+  "notificationTime": "Notification Time",
+  "daily": "Daily",
+  "weekly": "Weekly",
+  "monthly": "Monthly",
+  "homepage": "homepage",
+  "contact": "Contact",
+  
+  "newMission": "New Mission",
+  "suggestedMission": "Suggested Mission",
+  "enterNewMission": "Enter New Mission",
+  "completionRate": "Completion Rate",
+  "totalTasks": "Total Tasks",
+  "completedTasks": "Completed Tasks",
+  "averageCompletion": "Average Completion",
+  "previousRecords": "Previous Records",
+  "analysis": "Analysis",
+  "chart": "Chart",
+  
+  "todayThought": "Today's Thought",
+  "recordThought": "Record Thought",
+  "publicThoughts": "Public Thoughts",
+  "privateThoughts": "Private Thoughts",
+  "viewHistory": "View History",
+  "emotionAnalysis": "Emotion Analysis",
+  "emotionStatistics": "Emotion Statistics",
+  "publicEntry": "Public Entry",
+  "privateEntry": "Private Entry",
+  "noRecordsYet": "No Records Yet",
+  "writeToday": "Write Today",
+  "selectMood": "Select Mood",
+  "todayTopic": "Today's Topic",
+  "likeCount": "Like Count",
+  "showMore": "Show More",
+  
+  "taskAdded": "Task Added",
+  "taskCompleted": "Task Completed",
+  "taskDeleted": "Task Deleted",
+  "thoughtSaved": "Thought Saved",
+  "settingsSaved": "Settings Saved",
+  "loginRequired": "Login Required",
+  "networkError": "Network Error",
+  "likeAdded": "Like Added",
+  "likeRemoved": "Like Removed",
+  
+  "taskCompletionMessage": "{completed} of {total} tasks completed",
+  "@taskCompletionMessage": {
+    "placeholders": {
+      "completed": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "thoughtsCount": "{count} thoughts",
+  "@thoughtsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lastUpdated": "Last updated: {date}",
+  "@lastUpdated": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  
+  "encouragementBox": "Encouragement Box",
+  "todayFeeling": "Today's Feeling",
+  "expressYourFeelings": "Express your feelings",
+  "getEncouragement": "Get encouragement",
+  "encouragementForYou": "Encouragement for you",
+  "quoteOfTheDay": "Quote of the day",
+  "whatHappened": "What happened? How did you feel?",
+  "selectEmotion": "Please select your current emotion",
+  
+  "bookmarks": "Bookmarks",
+  "likes": "Likes",
+  "noSavedItems": "No saved items",
+  "refresh": "Refresh"
+} 
