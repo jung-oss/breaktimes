@@ -1,0 +1,55 @@
+rules_version = '2';
+
+// Breaktime 스토리지 보안 규칙 (2026-11-12 다시 작성)
+// 바뀐 점:
+// - 비타민 영상 경로(happiness_videos)를 추가했습니다. 전에는 규칙이 없어 업로드가 막혔습니다.
+// - 비타민 사진·영상은 본인만 읽습니다(전에는 로그인한 모든 사용자가 읽을 수 있었습니다).
+// - 음악 폴더는 앱에서 올릴 수 없습니다(전에는 로그인한 누구나 오디오 파일을 올릴 수 있었습니다).
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    // 프로필 이미지: 로그인한 사용자가 보고, 본인만 올립니다(3MB, 이미지)
+    match /profile_images/{userId} {
+      allow read: if signedIn();
+      allow create, update: if isOwner(userId)
+        && request.resource.size <= 3 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isOwner(userId);
+    }
+
+    // 음악: 로그인한 사용자가 듣고, 올리기는 콘솔에서만 합니다
+    match /music/{fileName} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // 비타민 사진(5MB, 이미지)
+    match /users/{userId}/happiness_photos/{fileName} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // 비타민 영상(50MB, 영상)과 영상 썸네일(5MB, 이미지)
+    match /users/{userId}/happiness_videos/{fileName} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && (
+        (request.resource.size <= 50 * 1024 * 1024
+          && request.resource.contentType.matches('video/.*'))
+        || (request.resource.size <= 5 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*'))
+      );
+    }
+
+    // 위에 없는 경로는 모두 막힙니다.
+  }
+}

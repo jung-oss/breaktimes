@@ -290,41 +290,36 @@ class AuthService {
       debugPrint('이메일: ${kakaoUser.kakaoAccount?.email}');
       debugPrint('닉네임: ${kakaoUser.kakaoAccount?.profile?.nickname}');
 
-      // 2. 카카오 ID로 기존 계정 찾기
-      debugPrint('=== 카카오 ID로 기존 계정 검색 중 ===');
-      final existingUser = await _firestore
-          .collection('users')
-          .where('kakaoId', isEqualTo: kakaoUser.id.toString())
-          .limit(1)
-          .get();
+      // 2. 기존 계정으로 먼저 로그인해 봅니다.
+      // 보안 규칙상 로그인 전에는 users 문서를 검색할 수 없으므로, 검색 대신 로그인을 시도합니다.
+      final tempEmail = 'kakao_${kakaoUser.id}@temp.app';
+      UserCredential? existingCredential;
+      try {
+        existingCredential = await _auth.signInWithEmailAndPassword(
+          email: tempEmail,
+          password: 'KAKAO_${kakaoUser.id}',
+        );
+      } on FirebaseAuthException catch (e) {
+        // 계정이 없으면 아래에서 새로 만듭니다. 그 밖의 오류(네트워크 등)는 그대로 알립니다.
+        const notFoundCodes = {
+          'user-not-found',
+          'invalid-credential',
+          'wrong-password',
+          'invalid-email',
+        };
+        if (!notFoundCodes.contains(e.code)) rethrow;
+        debugPrint('=== 기존 카카오 계정 없음 (${e.code}) ===');
+      }
 
-      if (existingUser.docs.isNotEmpty) {
-        // 3. 기존 계정이 있으면 해당 계정으로 로그인
-        debugPrint('=== 기존 카카오 계정 발견 ===');
-        final userDoc = existingUser.docs.first;
-        final userData = userDoc.data();
-        final tempEmail = 'kakao_${kakaoUser.id}@temp.app';
-
-        try {
-          // 기존 계정으로 로그인 시도
-          final credential = await _auth.signInWithEmailAndPassword(
-            email: tempEmail,
-            password: 'KAKAO_${kakaoUser.id}',
-          );
-
-          debugPrint('=== 기존 계정 로그인 성공 ===');
-
-          // 사용자 정보 업데이트
-          if (credential.user != null) {
-            await _updateUserProfile(credential.user!, kakaoUser);
-            await _ensureUserDocument(credential.user!, provider: 'kakao');
-          }
-
-          return credential;
-        } catch (e) {
-          debugPrint('=== 기존 계정 로그인 실패: $e ===');
-          throw Exception('기존 카카오 계정을 찾았지만 로그인에 실패했습니다.');
+      if (existingCredential != null) {
+        // 3. 기존 계정으로 로그인됨
+        debugPrint('=== 기존 계정 로그인 성공 ===');
+        if (existingCredential.user != null) {
+          await _updateUserProfile(existingCredential.user!, kakaoUser);
+          await _ensureUserDocument(existingCredential.user!,
+              provider: 'kakao');
         }
+        return existingCredential;
       } else {
         // 4. 새 계정 생성 (이메일 무관)
         debugPrint('=== 새 카카오 계정 생성 중 ===');

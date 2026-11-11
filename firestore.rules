@@ -1,112 +1,167 @@
 rules_version = '2';
+
+// Breaktime 파이어스토어 보안 규칙 (2026-11-12 다시 작성)
+// - 자기 문서만 읽고 씁니다. 공개 글(publicEntries)만 로그인한 사용자끼리 읽습니다.
+// - 사랑하기(heartCount)·슬롯 수는 앱이 정한 방법(사용, 슬롯 구매, 하루 보상 +1)으로만 바뀝니다.
+// - 질문·명언·가게 목록은 누구나 읽고, 관리자만 씁니다(콘솔에서 쓰는 것은 규칙과 상관없이 됩니다).
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 사용자 인증 여부 확인 함수
-    function isAuthenticated() {
+
+    // ---------- 공통 함수 ----------
+
+    function signedIn() {
       return request.auth != null;
     }
-    
-    // 문서 소유자 확인 함수
+
     function isOwner(userId) {
-      return request.auth.uid == userId;
+      return signedIn() && request.auth.uid == userId;
     }
-    
-    // 관리자 확인 함수 - 특정 이메일 주소를 가진 사용자만 관리자 권한 부여
+
+    // 관리자: 이메일 인증을 마친 아래 계정만
     function isAdmin() {
-      return request.auth != null && (
-        request.auth.token.email == 'mainasv@naver.com' || 
-        request.auth.token.email == 'inlover78@naver.com'
+      return signedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['mainasv@naver.com', 'inlover78@naver.com'];
+    }
+
+    function pad2(n) {
+      return n < 10 ? '0' + string(n) : string(n);
+    }
+
+    // 'YYYY-MM-DD' (UTC 기준)
+    function dayString(t) {
+      return string(t.year()) + '-' + pad2(t.month()) + '-' + pad2(t.day());
+    }
+
+    // 하루 보상 날짜는 내일(UTC)까지만 받습니다. 한국 시간이 UTC보다 9시간 빠르기 때문입니다.
+    function latestRewardDay() {
+      return dayString(request.time + duration.value(1, 'd'));
+    }
+
+    // 보상 날짜 표시가 앞으로(새 날짜로) 바뀌었는지
+    function markMovedForward(oldValue, newValue) {
+      return newValue is string
+        && newValue.size() == 10
+        && newValue <= latestRewardDay()
+        && (oldValue == null || newValue > oldValue);
+    }
+
+    // 하루 보상 +1: 보상 날짜 표시 하나가 새 날짜로 바뀌어야 합니다.
+    function dailyRewardMarkChanged(before, after) {
+      let oldRewards = before.get('heartRewards', {});
+      let newRewards = after.get('heartRewards', {});
+      return markMovedForward(before.get('lastHeartDate', null), after.get('lastHeartDate', null))
+        || markMovedForward(oldRewards.get('mission', null), newRewards.get('mission', null))
+        || markMovedForward(oldRewards.get('happyBox', null), newRewards.get('happyBox', null));
+    }
+
+    // 사랑하기·슬롯·역할 필드를 바꾸는 방법이 올바른지
+    function heartFieldsValid(before, after) {
+      let oldHearts = before.get('heartCount', 0);
+      let newHearts = after.get('heartCount', 0);
+      let oldSlots = before.get('slotCount', 1);
+      let newSlots = after.get('slotCount', 1);
+      let maxSlots = before.get('maxSlots', 20);
+      return after.get('role', null) == before.get('role', null)
+        && after.get('maxSlots', 20) == maxSlots
+        && newHearts is number
+        && newHearts >= 0
+        && (
+          // 그대로
+          (newHearts == oldHearts && newSlots == oldSlots)
+          // 사랑하기 사용
+          || (newHearts < oldHearts && newSlots == oldSlots)
+          // 비타민 슬롯 1개 구매(사랑하기 5개 이상 사용)
+          || (newSlots == oldSlots + 1 && newSlots <= maxSlots && newHearts <= oldHearts - 5)
+          // 하루 보상 +1
+          || (newHearts == oldHearts + 1 && newSlots == oldSlots
+              && dailyRewardMarkChanged(before, after))
+        );
+    }
+
+    // ---------- 사용자 ----------
+
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+
+      // [임시 허용 - 2026-11-12] 옛 버전 앱은 카카오 로그인 전에 kakaoId로 사용자 1건을 검색합니다.
+      // 새 앱(검색하지 않고 바로 로그인)으로 사용자 대부분이 업데이트하면 이 줄을 지웁니다.
+      allow list: if request.query.limit <= 1
+        && resource.data.kakaoId is string;
+
+      // 처음 만들 때 사랑하기는 0개, 역할·슬롯은 기본값만
+      allow create: if isOwner(userId)
+        && request.resource.data.get('heartCount', 0) == 0
+        && !('role' in request.resource.data)
+        && request.resource.data.get('slotCount', 1) == 1
+        && request.resource.data.get('maxSlots', 20) == 20;
+
+      allow update: if isOwner(userId)
+        && heartFieldsValid(resource.data, request.resource.data);
+
+      // 행복-함 일기, 할 일, 좋아요·북마크 기록, 설정, 가게 결과(운세·위로·명언) 등
+      // ({subPath=**}만 쓰면 사용자 문서 자체에도 맞아 위 제한이 풀리므로, 하위 컬렉션 이름을 따로 받습니다)
+      match /{subCollection}/{subPath=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ---------- 공개 글 ----------
+
+    match /publicEntries/{entryId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      // 글쓴이: 내용 수정
+      // 다른 사용자: 좋아요 수만 1씩 올리거나 내림
+      allow update: if signedIn() && (
+        (resource.data.userId == request.auth.uid
+          && request.resource.data.userId == request.auth.uid)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])
+          && request.resource.data.likeCount is int
+          && request.resource.data.likeCount >= 0
+          && (request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1
+            || request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1))
       );
+
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
-    
-    // 역할 기반 관리자 확인 함수
-    function hasAdminRole(uid) {
-      return exists(/databases/$(database)/documents/users/$(uid)) &&
-             get(/databases/$(database)/documents/users/$(uid)).data.role == 'admin';
+
+    // ---------- 비타민 슬롯 (사용자별, userId 필드로 구분) ----------
+
+    match /happiness_slots/{slotId} {
+      allow read, delete: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == request.auth.uid;
     }
-    
-    // 좋아요 관련 업데이트 여부 확인 함수
-    function isLikeUpdate(oldData, newData) {
-      // likeCount 필드만 변경되는 것을 확인
-      return oldData.likeCount != newData.likeCount && 
-             // 다른 필드는 변경되지 않음을 확인
-             oldData.content == newData.content &&
-             oldData.userId == newData.userId &&
-             oldData.mood == newData.mood &&
-             oldData.isPublic == newData.isPublic;
-    }
-    
-    // 앱 설정 - 모든 사용자가 읽기 가능, 관리자만 쓰기 가능
-    match /app_configs/{document} {
+
+    // ---------- 운영 자료 (누구나 읽기, 관리자만 쓰기) ----------
+
+    // 오늘의 질문(topics/topic/items), 할 일 추천(topics/todo/items)
+    match /topics/{path=**} {
       allow read: if true;
       allow write: if isAdmin();
     }
-    
-    // 기본 설정: 모든 문서에 대해 기본적으로 접근 거부
-    match /{document=**} {
-      allow read, write: if false;
-    }
-    
-    // 사용자 컬렉션 규칙
-    match /users/{userId} {
-      // 자신의 프로필은 읽고 쓸 수 있음
-      allow read, write: if isOwner(userId);
-      
-      // kakaoId로 검색할 때는 인증된 모든 사용자가 읽을 수 있음 (카카오 로그인용)
-      allow read: if isAuthenticated();
-      
-      // 하위 컬렉션들
-      match /moods/{moodId} {
-        // 사용자는 자신의 감정 기록을 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /todos/{todoId} {
-        // 사용자는 자신의 할 일을 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /progress/{date} {
-        // 사용자는 자신의 진행 상황을 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /likes/{entryId} {
-        // 사용자는 자신의 좋아요 정보를 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /bookmarks/{entryId} {
-        // 사용자는 자신의 북마크 정보를 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /used_topics/{date} {
-        // 사용자는 자신이 사용한 주제 기록을 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      match /settings/{settingId} {
-        // 사용자는 자신의 설정을 읽고 쓸 수 있음
-        allow read, write: if isOwner(userId);
-      }
-      
-      // 사용자별 선호도 설정
-      match /preferences/{document=**} {
-        allow read, write: if isAuthenticated() && isOwner(userId);
-      }
-    }
-    
-    // 공개 엔트리 컬렉션 (모든 사용자가 읽기 가능)
-    match /publicEntries/{entryId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // 주제 컬렉션 (모든 사용자가 읽기 가능, 관리자만 쓰기 가능)
-    match /topics/{document=**} {
-      allow read: if isAuthenticated();
+
+    match /daily_quotes/{quoteId} {
+      allow read: if true;
       allow write: if isAdmin();
     }
+
+    match /shop_catalog/{path=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /app_configs/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 위에 없는 경로는 모두 막힙니다(규칙이 없으면 기본 거부).
   }
 }
