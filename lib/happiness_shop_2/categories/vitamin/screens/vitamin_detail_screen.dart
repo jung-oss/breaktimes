@@ -6,6 +6,7 @@ import '../services/vitamin_service.dart';
 import '../../../common/theme/shop_tokens.dart';
 import '../../../common/widgets/shop_widgets.dart';
 import 'vitamin_add_screen.dart';
+import 'vitamin_video_player_screen.dart';
 
 class VitaminDetailScreen extends StatelessWidget {
   final VitaminSlot slot;
@@ -200,41 +201,44 @@ class VitaminDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 영상 썸네일 또는 아이콘
-          Container(
-            width: double.infinity,
-            height: 300,
-            color: t.line,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // 썸네일이 있으면 표시
-                if (slot.content.thumbnailUrl != null)
-                  Image.network(
-                    slot.content.thumbnailUrl!,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(Icons.videocam, size: 64, color: t.ink2);
-                    },
-                  )
-                else
-                  Icon(Icons.videocam, size: 64, color: t.ink2),
-                // 재생 아이콘(영상 위 표시라 어두운 막을 둡니다)
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(153),
-                    shape: BoxShape.circle,
+          // 영상 썸네일 또는 아이콘(누르면 재생)
+          GestureDetector(
+            onTap: () => _openVideo(context, isKorean),
+            child: Container(
+              width: double.infinity,
+              height: 300,
+              color: t.line,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // 썸네일이 있으면 표시
+                  if (slot.content.thumbnailUrl != null)
+                    Image.network(
+                      slot.content.thumbnailUrl!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(Icons.videocam, size: 64, color: t.ink2);
+                      },
+                    )
+                  else
+                    Icon(Icons.videocam, size: 64, color: t.ink2),
+                  // 재생 아이콘(영상 위 표시라 어두운 막을 둡니다)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(153),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.play_arrow,
+                      color: Colors.white,
+                      size: 48,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.white,
-                    size: 48,
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -260,9 +264,7 @@ class VitaminDetailScreen extends StatelessWidget {
                 context,
                 icon: Icons.play_arrow,
                 label: isKorean ? '영상 재생' : 'Play Video',
-                onPressed: () {
-                  // 비디오 재생 로직
-                },
+                onPressed: () => _openVideo(context, isKorean),
               ),
             ),
           // 메모 표시
@@ -273,6 +275,23 @@ class VitaminDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// 영상 재생 화면을 엽니다. 영상 주소가 없으면 안내만 합니다.
+  void _openVideo(BuildContext context, bool isKorean) {
+    final url = slot.content.compressedUrl;
+    if (url == null || url.isEmpty) {
+      showShopToast(
+        context,
+        isKorean ? '재생할 영상이 없어요.' : 'No video to play.',
+      );
+      return;
+    }
+    Navigator.of(context).push(VitaminVideoPlayerScreen.route(
+      videoUrl: url,
+      title: slot.title,
+      isKorean: isKorean,
+    ));
   }
 
   Widget _buildUrlView(BuildContext context) {
