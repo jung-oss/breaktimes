@@ -108,24 +108,13 @@ class LoveLedgerEntry {
 /// 사랑하기 기록(장부)
 ///
 /// 경로: users/{uid}/love_ledger/{자동 ID}
-/// 잔액을 바꾸는 트랜잭션 안에서 [write]를 함께 불러, 잔액과 기록이 함께 저장되게 합니다.
-/// 지금은 앱이 기록을 쓰므로 참고용입니다. 서버 함수로 옮기면(기획안 4단계) 정확한 장부가 됩니다.
+/// 기록은 서버 함수가 잔액과 한 트랜잭션으로 씁니다(source: 'server'). 앱은 읽기와 사용 통계만 합니다.
 class LoveLedger {
   LoveLedger._();
 
   static CollectionReference<Map<String, dynamic>> collection(
           FirebaseFirestore firestore, String uid) =>
       firestore.collection('users').doc(uid).collection('love_ledger');
-
-  /// 트랜잭션 안에서 기록 한 줄을 씁니다.
-  static void write(
-    Transaction transaction,
-    FirebaseFirestore firestore,
-    String uid,
-    LoveLedgerEntry entry,
-  ) {
-    transaction.set(collection(firestore, uid).doc(), entry.toMap());
-  }
 
   /// 트랜잭션이 성공한 뒤 사용 통계에 남깁니다. 실패해도 앱 동작에는 영향이 없습니다.
   static void track(LoveLedgerEntry entry) {

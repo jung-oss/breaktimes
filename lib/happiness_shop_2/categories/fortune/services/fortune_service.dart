@@ -1,24 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/fortune_item.dart';
-import '../../../common/services/gemini_shop_service.dart';
 import '../../../common/services/heart_cost_service.dart';
-import '../../../common/services/shop_charge_service.dart';
 import '../../../common/services/love_ledger.dart';
-import '../../../../services/environment_service.dart';
+import '../../../common/services/shop_charge_service.dart';
+import '../../../common/services/shop_functions.dart';
 
 class FortuneService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GeminiShopService _geminiService = GeminiShopService();
-  final ShopChargeService _charge = ShopChargeService();
 
   String get userId => _auth.currentUser?.uid ?? '';
 
   CollectionReference<Map<String, dynamic>> get _fortunes =>
       _firestore.collection('users').doc(userId).collection('fortunes');
 
-  /// 오늘의 운세를 만듭니다. 사랑하기는 운세가 나온 뒤에 빠집니다.
+  /// 오늘의 운세를 서버에서 만듭니다. 사랑하기는 서버가 결과를 저장할 때 빠집니다.
   Future<FortuneItem?> createTodayFortune({
     required String locale,
     String? mood,
@@ -26,82 +23,31 @@ class FortuneService {
   }) async {
     if (userId.isEmpty) throw Exception('NOT_LOGGED_IN');
 
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
     if (!forceRegenerate) {
       final existing = await getTodayFortune();
       if (existing != null) return existing;
     }
 
-    await _charge.ensureAffordable(HeartCost.FORTUNE);
+    final result = await ShopFunctions.call('shopCreateResult', {
+      'kind': 'fortune',
+      'locale': locale,
+      'dayStart': ShopFunctions.localDayStartMillis(),
+      if (mood != null) 'mood': mood,
+    });
+    _track(result, LoveReason.fortune);
 
-    final docRef = _fortunes.doc();
-    final item = FortuneItem(
-      id: docRef.id,
-      userId: userId,
-      mood: mood,
-      content: '',
-      date: today,
-      createdAt: now,
-      updatedAt: now,
-      status: 'pending',
-    );
-
-    try {
-      await docRef.set({
-        ...item.toFirestore(),
-        ..._charge.chargeFields(HeartCost.FORTUNE, locale),
-      });
-    } on FirebaseException {
-      throw Exception('NETWORK_ERROR');
-    }
-    _generateInBackground(docRef, locale, today, mood);
-    return item;
+    final snap = await _fortunes.doc(result['id'] as String).get();
+    return snap.exists ? FortuneItem.fromFirestore(snap) : null;
   }
 
-  Future<void> _generateInBackground(
-    DocumentReference<Map<String, dynamic>> docRef,
-    String locale,
-    DateTime date,
-    String? mood,
-  ) async {
-    if (!_charge.begin(docRef.id)) return;
-    try {
-      final result = await _geminiService.generateFortune(
-        date: date,
-        locale: locale,
-        mood: mood,
-      );
-      final modelName = EnvironmentService.instance.get(
-        'GEMINI_MODEL_NAME',
-        defaultValue: '',
-      );
-      await _charge.complete(
-        docRef,
-        {
-          'content': result.text,
-          'status': 'generated',
-          'model': result.isFallback ? '' : modelName,
-        },
-        isFallback: result.isFallback,
-        reason: LoveReason.fortune,
-      );
-    } catch (_) {
-      await _charge.markFailed(docRef);
-    } finally {
-      _charge.end(docRef.id);
-    }
-  }
-
-  /// 앱이 꺼져 'pending'에 멈춘 운세를 이어서 만듭니다.
+  /// 예전 앱에서 'pending'에 멈춘 운세는 실패로 표시해 다시 받을 수 있게 합니다
+  /// (그 운세는 사랑하기가 빠지지 않았습니다).
   Future<void> resumeIfPending(FortuneItem item) async {
     final docRef = _fortunes.doc(item.id);
     final snap = await docRef.get();
     final data = snap.data();
     if (data == null || !ShopChargeService.isStalePending(data)) return;
-    final locale = data['locale'] as String? ?? 'ko';
-    _generateInBackground(docRef, locale, item.date, item.mood);
+    await ShopChargeService().markFailed(docRef);
   }
 
   /// 오늘 받은 운세 중 가장 최근 것(다시 받기를 했으면 새 운세)
@@ -132,5 +78,15 @@ class FortuneService {
 
   Future<void> deleteFortune(String id) async {
     await _fortunes.doc(id).delete();
+  }
+
+  void _track(Map<String, dynamic> result, LoveReason reason) {
+    if (result['charged'] != true) return;
+    LoveLedger.track(LoveLedgerEntry(
+      isEarn: false,
+      amount: HeartCost.FORTUNE,
+      reason: reason,
+      balanceAfter: (result['balanceAfter'] as num?)?.toInt() ?? 0,
+    ));
   }
 }

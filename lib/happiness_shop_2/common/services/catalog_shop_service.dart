@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../data/catalog_seed.dart';
 import '../models/shop_catalog_item.dart';
 import 'love_ledger.dart';
+import 'shop_functions.dart';
 
 /// 도감 한 묶음의 진행 상황
 class CollectionSetProgress {
@@ -72,8 +73,6 @@ class CatalogShopService {
 
   CollectionReference<Map<String, dynamic>> get _collection =>
       _userRef.collection('collection');
-
-  String _collectionDocId(String itemId) => '${categoryId}__$itemId';
 
   String _bonusKey(String setId) => '${categoryId}__$setId';
 
@@ -175,68 +174,46 @@ class CatalogShopService {
     return pool.take(choiceCount).toList();
   }
 
-  /// 고른 카드를 도감에 넣습니다. 사랑하기 차감·도감 저장·기록을 한 번에 처리합니다.
+  /// 고른 카드를 도감에 넣습니다(서버 함수 shopCollectCard).
   ///
+  /// 사랑하기 차감·도감 저장·기록·묶음 완성 확인과 보너스를 서버가 한 번에 처리합니다.
   /// 이미 가진 카드면 ALREADY_OWNED, 부족하면 INSUFFICIENT_HEARTS,
-  /// 연결 문제면 NETWORK_ERROR 예외를 던집니다.
+  /// 오늘 횟수를 다 쓰면 DAILY_LIMIT, 연결 문제면 NETWORK_ERROR 예외를 던집니다.
   Future<CollectResult> collect(ShopCatalogItem item) async {
     if (userId.isEmpty) throw Exception('NOT_LOGGED_IN');
 
-    final docRef = _collection.doc(_collectionDocId(item.id));
-    LoveLedgerEntry? spent;
-    try {
-      await _firestore.runTransaction((transaction) async {
-        spent = null;
-        final existing = await transaction.get(docRef);
-        if (existing.exists) throw Exception('ALREADY_OWNED');
-        final userDoc = await transaction.get(_userRef);
-        final hearts = (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
-        if (hearts < heartCost) throw Exception('INSUFFICIENT_HEARTS');
+    final result = await ShopFunctions.call('shopCollectCard', {
+      'categoryId': categoryId,
+      'itemId': item.id,
+    });
+    final balance = (result['balanceAfter'] as num?)?.toInt() ?? 0;
+    final bonusGranted = result['bonusGranted'] == true;
+    final completedSetId = result['completedSetId'] as String?;
 
-        transaction.update(_userRef, {
-          'heartCount': hearts - heartCost,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        transaction.set(docRef, {
-          ...item.toCollectionMap(categoryId),
-          'collectedAt': FieldValue.serverTimestamp(),
-        });
-        final entry = LoveLedgerEntry(
-          isEarn: false,
-          amount: heartCost,
-          reason: LoveReason.fromCategoryId(categoryId),
-          balanceAfter: hearts - heartCost,
-          itemPath: docRef.path,
-        );
-        LoveLedger.write(transaction, _firestore, userId, entry);
-        spent = entry;
-      });
-    } on FirebaseException {
-      throw Exception('NETWORK_ERROR');
+    // 사용 통계(기록 자체는 서버가 남깁니다)
+    LoveLedger.track(LoveLedgerEntry(
+      isEarn: false,
+      amount: heartCost,
+      reason: LoveReason.fromCategoryId(categoryId),
+      balanceAfter: bonusGranted ? balance - setBonus : balance,
+    ));
+    if (bonusGranted) {
+      LoveLedger.track(LoveLedgerEntry(
+        isEarn: true,
+        amount: setBonus,
+        reason: LoveReason.collectionBonus,
+        balanceAfter: balance,
+      ));
     }
-    final entry = spent!;
-    LoveLedger.track(entry);
 
-    // 이번 카드로 묶음을 완성했는지 확인하고 보너스를 받습니다.
     CollectionSetProgress? completed;
-    var bonusGranted = false;
-    var balance = entry.balanceAfter;
-    try {
-      final progress = await loadProgress();
-      for (final set in progress) {
-        if (set.setId == item.setId && set.isComplete) {
-          completed = set;
-          if (!set.bonusClaimed) {
-            final after = await _claimSetBonus(set.setId);
-            if (after != null) {
-              bonusGranted = true;
-              balance = after;
-            }
-          }
+    if (completedSetId != null) {
+      try {
+        final progress = await loadProgress();
+        for (final set in progress) {
+          if (set.setId == completedSetId) completed = set;
         }
-      }
-    } catch (_) {
-      // 보너스 확인에 실패해도 카드는 이미 도감에 들어갔습니다.
+      } catch (_) {}
     }
 
     return CollectResult(
@@ -245,43 +222,5 @@ class CatalogShopService {
       completedSet: completed,
       bonusGranted: bonusGranted,
     );
-  }
-
-  /// 묶음 완성 보너스(+[setBonus]). 이미 받았거나 실패하면 null, 받으면 받은 뒤 잔액.
-  Future<int?> _claimSetBonus(String setId) async {
-    final key = _bonusKey(setId);
-    final now = DateTime.now();
-    final today =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    LoveLedgerEntry? earned;
-    try {
-      await _firestore.runTransaction((transaction) async {
-        earned = null;
-        final userDoc = await transaction.get(_userRef);
-        final bonuses = userDoc.data()?['collectionBonuses'];
-        if (bonuses is Map && bonuses.containsKey(key)) return;
-        final hearts = (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
-        transaction.update(_userRef, {
-          'heartCount': FieldValue.increment(setBonus),
-          'collectionBonuses.$key': today,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        final entry = LoveLedgerEntry(
-          isEarn: true,
-          amount: setBonus,
-          reason: LoveReason.collectionBonus,
-          balanceAfter: hearts + setBonus,
-        );
-        LoveLedger.write(transaction, _firestore, userId, entry);
-        earned = entry;
-      });
-    } catch (_) {
-      // 보안 규칙이 아직 보너스를 허용하지 않으면 여기로 옵니다.
-      return null;
-    }
-    final entry = earned;
-    if (entry == null) return null;
-    LoveLedger.track(entry);
-    return entry.balanceAfter;
   }
 }

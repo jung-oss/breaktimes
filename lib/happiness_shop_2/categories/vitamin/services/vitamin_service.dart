@@ -6,15 +6,14 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/vitamin_slot.dart';
 import '../models/vitamin_content.dart';
-import '../../../common/services/gemini_quote_service.dart';
 import '../../../common/services/love_ledger.dart';
+import '../../../common/services/shop_functions.dart';
 
 /// 행복 비타민 서비스 (기존 슬롯 시스템)
 class VitaminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GeminiQuoteService _quoteService = GeminiQuoteService();
 
   static const int SLOT_PRICE = 5; // 하트 5개
   static const int DEFAULT_SLOTS = 1; // 기본 슬롯 1개
@@ -38,50 +37,19 @@ class VitaminService {
     }
   }
 
-  /// 슬롯 구매
+  /// 슬롯 늘리기(서버 함수 shopPurchaseSlot, 사랑하기 5개)
+  ///
+  /// 성공하면 true. 부족·최대·연결 문제는 false(사랑하기는 그대로)입니다.
   Future<bool> purchaseSlot() async {
-    LoveLedgerEntry? spent;
     try {
-      final ok = await _firestore.runTransaction<bool>((transaction) async {
-        spent = null;
-        final userRef = _firestore.collection('users').doc(userId);
-        final userDoc = await transaction.get(userRef);
-
-        if (!userDoc.exists) {
-          throw Exception('User document not found');
-        }
-
-        final currentHearts = userDoc.data()?['heartCount'] ?? 0;
-        final currentSlots = userDoc.data()?['slotCount'] ?? DEFAULT_SLOTS;
-        final maxSlots = userDoc.data()?['maxSlots'] ?? MAX_SLOTS;
-
-        if (currentHearts < SLOT_PRICE) {
-          return false;
-        }
-
-        if (currentSlots >= maxSlots) {
-          return false;
-        }
-
-        transaction.update(userRef, {
-          'heartCount': currentHearts - SLOT_PRICE,
-          'slotCount': currentSlots + 1,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        final entry = LoveLedgerEntry(
-          isEarn: false,
-          amount: SLOT_PRICE,
-          reason: LoveReason.vitaminSlot,
-          balanceAfter: (currentHearts as num).toInt() - SLOT_PRICE,
-        );
-        LoveLedger.write(transaction, _firestore, userId, entry);
-        spent = entry;
-
-        return true;
-      });
-      final entry = spent;
-      if (ok && entry != null) LoveLedger.track(entry);
-      return ok;
+      final result = await ShopFunctions.call('shopPurchaseSlot');
+      LoveLedger.track(LoveLedgerEntry(
+        isEarn: false,
+        amount: SLOT_PRICE,
+        reason: LoveReason.vitaminSlot,
+        balanceAfter: (result['balanceAfter'] as num?)?.toInt() ?? 0,
+      ));
+      return true;
     } catch (e) {
       return false;
     }
@@ -296,39 +264,15 @@ class VitaminService {
     }
   }
 
-  /// 백그라운드에서 AI 명언 생성
+  /// AI 글귀 만들기(서버 함수 vitaminGenerateQuote, 무료·하루 횟수 제한)
+  ///
+  /// 서버가 슬롯의 상태(pending → generated)와 글귀를 직접 저장합니다.
   Future<void> _generateQuoteInBackground(
       String slotId, String userText, VitaminContent content) async {
     try {
-      // 상태를 pending으로 설정
-      final slotRef = _firestore.collection('happiness_slots').doc(slotId);
-      await slotRef.update({
-        'content.aiQuoteStatus': 'pending',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // AI 명언 생성
-      final quote = await _quoteService.generateQuote(
-        userText,
-        DateTime.now(),
-      );
-
-      // 생성된 명언 저장
-      await slotRef.update({
-        'content.aiQuote': quote,
-        'content.aiQuoteGeneratedAt': FieldValue.serverTimestamp(),
-        'content.aiQuoteStatus': 'generated',
-        'content.aiQuoteModel': 'gemini-2.0-flash-lite',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await ShopFunctions.call('vitaminGenerateQuote', {'slotId': slotId});
     } catch (e) {
-      // 실패 시 상태 업데이트
-      try {
-        await _firestore.collection('happiness_slots').doc(slotId).update({
-          'content.aiQuoteStatus': 'failed',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      // 실패해도 슬롯 내용은 그대로입니다. 다음에 수정하면 다시 만듭니다.
     }
   }
 

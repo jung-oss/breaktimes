@@ -829,6 +829,14 @@ void showShopError(BuildContext context, Object error, bool isKorean) {
         : 'Connection problem. No Love was used. Please try again shortly.';
   } else if (msg.contains('NOT_LOGGED_IN')) {
     text = isKorean ? '로그인이 필요해요.' : 'Please sign in first.';
+  } else if (msg.contains('DAILY_LIMIT')) {
+    text = isKorean
+        ? '오늘은 여기까지 받을 수 있어요. 내일 다시 만나요.'
+        : "That's all for today. See you tomorrow.";
+  } else if (msg.contains('MAX_SLOTS')) {
+    text = isKorean ? '슬롯은 더 늘릴 수 없어요.' : 'You have the maximum slots.';
+  } else if (msg.contains('MESSAGE_TOO_SHORT')) {
+    text = isKorean ? '10자 이상 적어 주세요.' : 'Please write at least 10 characters.';
   } else {
     text = isKorean
         ? '잠시 문제가 생겼어요. 사랑하기는 그대로예요.'

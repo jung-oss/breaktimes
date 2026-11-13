@@ -3,6 +3,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/heart_info.dart';
 import 'love_ledger.dart';
+import 'shop_functions.dart';
+
+/// 하루 보상 요청 결과
+enum DailyClaimResult { awarded, alreadyClaimed, notEligible, failed }
 
 /// 하트를 주는 활동
 enum HeartReward {
@@ -43,95 +47,46 @@ class HeartService {
     }
   }
 
-  /// 하트 사용
-  Future<bool> useHearts(int amount,
-      {LoveReason reason = LoveReason.other}) async {
-    LoveLedgerEntry? spent;
-    try {
-      final ok = await _firestore.runTransaction<bool>((transaction) async {
-        spent = null;
-        final userRef = _firestore.collection('users').doc(userId);
-        final userDoc = await transaction.get(userRef);
-
-        if (!userDoc.exists) {
-          throw Exception('User document not found');
-        }
-
-        final currentHearts = userDoc.data()?['heartCount'] ?? 0;
-
-        if (currentHearts < amount) {
-          return false;
-        }
-
-        transaction.update(userRef, {
-          'heartCount': currentHearts - amount,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        final entry = LoveLedgerEntry(
-          isEarn: false,
-          amount: amount,
-          reason: reason,
-          balanceAfter: (currentHearts as num).toInt() - amount,
-        );
-        LoveLedger.write(transaction, _firestore, userId, entry);
-        spent = entry;
-
-        return true;
-      });
-      final entry = spent;
-      if (ok && entry != null) LoveLedger.track(entry);
-      return ok;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// 활동 보상으로 하트 1개를 하루 한 번 지급합니다.
+  /// 활동 보상으로 사랑하기 1개를 하루 한 번 받습니다(서버 함수 loveClaimDaily).
   ///
-  /// [reason]마다 받은 날짜를 `heartRewards.<reason>`에 기록해 같은 날 다시 주지 않습니다.
-  /// 지급했으면 true, 이미 받았거나 실패하면 false를 돌려줍니다.
+  /// 서버가 조건(미션 100%, 오늘 행복-함 글)을 직접 확인합니다.
+  /// 받았으면 true, 이미 받았거나 조건이 안 되거나 실패하면 false입니다.
   Future<bool> awardDailyHeart(HeartReward reason) async {
     if (userId.isEmpty) return false;
+    // 행복-함 글은 잠시 뒤(묶음 저장)에 서버에 올라가므로, 아직 안 보이면 몇 번 다시 물어봅니다.
+    const retryDelays = [
+      Duration.zero,
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+      Duration(seconds: 8),
+    ];
+    for (final delay in retryDelays) {
+      if (delay > Duration.zero) await Future.delayed(delay);
+      final result = await claimDaily(reason.ledgerReason);
+      if (result != DailyClaimResult.notEligible) {
+        return result == DailyClaimResult.awarded;
+      }
+    }
+    return false;
+  }
 
-    final now = DateTime.now();
-    final today =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-    LoveLedgerEntry? earned;
+  /// 하루 보상 한 번 요청(서버 함수 loveClaimDaily)
+  static Future<DailyClaimResult> claimDaily(LoveReason reason) async {
     try {
-      final ok = await _firestore.runTransaction<bool>((transaction) async {
-        earned = null;
-        final userRef = _firestore.collection('users').doc(userId);
-        final userDoc = await transaction.get(userRef);
-        if (!userDoc.exists) return false;
-
-        final rewards = userDoc.data()?['heartRewards'];
-        if (rewards is Map && rewards[reason.key] == today) {
-          return false;
-        }
-
-        transaction.update(userRef, {
-          'heartCount': FieldValue.increment(1),
-          'heartRewards.${reason.key}': today,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        final hearts =
-            (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
-        final entry = LoveLedgerEntry(
-          isEarn: true,
-          amount: 1,
-          reason: reason.ledgerReason,
-          balanceAfter: hearts + 1,
-        );
-        LoveLedger.write(transaction, _firestore, userId, entry);
-        earned = entry;
-        return true;
-      });
-      final entry = earned;
-      if (ok && entry != null) LoveLedger.track(entry);
-      return ok;
+      final result =
+          await ShopFunctions.call('loveClaimDaily', {'reason': reason.key});
+      if (result['awarded'] != true) return DailyClaimResult.alreadyClaimed;
+      LoveLedger.track(LoveLedgerEntry(
+        isEarn: true,
+        amount: 1,
+        reason: reason,
+        balanceAfter: (result['balanceAfter'] as num?)?.toInt() ?? 0,
+      ));
+      return DailyClaimResult.awarded;
     } catch (e) {
-      return false;
+      return e.toString().contains('NOT_ELIGIBLE')
+          ? DailyClaimResult.notEligible
+          : DailyClaimResult.failed;
     }
   }
 

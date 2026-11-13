@@ -121,8 +121,8 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
         Navigator.of(context).pop(true);
         _showSnackBar(
           isKorean
-              ? '생각이 기록되었습니다. 글귀를 생성하고 있어요!'
-              : 'Thought recorded. Generating quote!',
+              ? '글귀가 도착했어요.'
+              : 'Your quote has arrived.',
         );
       }
     } catch (e) {

@@ -12,7 +12,7 @@ class HeartCost {
   static const int TRAVEL = 1; // 행복 여행
 }
 
-/// 하트 소진 통합 관리 서비스
+/// 사랑하기 값과 "충분한지" 확인(빼는 일은 서버가 합니다)
 class HeartCostService {
   final HeartService _heartService = HeartService();
 
@@ -26,22 +26,6 @@ class HeartCostService {
     }
   }
 
-  /// 하트 소진 (트랜잭션 사용)
-  Future<bool> spendHearts(int cost) async {
-    try {
-      return await _heartService.useHearts(cost);
-    } catch (e) {
-      return false;
-    }
-  }
-
-  /// 하트 소진 가능 여부 확인 및 소진 (통합)
-  Future<bool> checkAndSpendHearts(int cost) async {
-    final canAfford = await this.canAfford(cost);
-    if (!canAfford) {
-      return false;
-    }
-    return await spendHearts(cost);
-  }
+  // 사랑하기를 빼는 일은 서버 함수(shop_functions.dart)가 합니다.
 }
 

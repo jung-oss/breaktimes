@@ -7,6 +7,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io' if (dart.library.html) 'dart:html';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import '../happiness_shop_2/common/services/love_ledger.dart';
+import '../happiness_shop_2/common/services/heart_service.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -65,35 +66,11 @@ class AuthService {
     try {
       if (_auth.currentUser == null) return;
 
-      final userDoc =
-          _firestore.collection('users').doc(_auth.currentUser!.uid);
-      final today = DateTime.now().toIso8601String().split('T')[0];
-
-      // 확인과 지급을 한 트랜잭션으로 묶어, 동시에 두 번 불려도 하루 1개만 줍니다.
-      LoveLedgerEntry? earned;
-      await _firestore.runTransaction((transaction) async {
-        earned = null;
-        final userData = await transaction.get(userDoc);
-        if (!userData.exists) return;
-        if (userData.data()?['lastHeartDate'] == today) return;
-        transaction.update(userDoc, {
-          'heartCount': FieldValue.increment(1),
-          'lastHeartDate': today,
-        });
-        final hearts =
-            (userData.data()?['heartCount'] as num?)?.toInt() ?? 0;
-        final entry = LoveLedgerEntry(
-          isEarn: true,
-          amount: 1,
-          reason: LoveReason.dailyCheckIn,
-          balanceAfter: hearts + 1,
-        );
-        LoveLedger.write(
-            transaction, _firestore, _auth.currentUser!.uid, entry);
-        earned = entry;
-      });
-      final entry = earned;
-      if (entry != null) LoveLedger.track(entry);
+      // 출석 보상은 서버 함수(loveClaimDaily)가 하루 한 번만 줍니다.
+      final result = await HeartService.claimDaily(LoveReason.dailyCheckIn);
+      if (result == DailyClaimResult.failed) {
+        throw Exception('NETWORK_ERROR');
+      }
     } catch (e) {
       debugPrint('Heart count increment error: $e');
       rethrow;
