@@ -5,10 +5,19 @@
   "storage": {
     "rules": "storage.rules"
   },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "shop",
+      "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log", "*.local"],
+      "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+    }
+  ],
   "emulators": {
     "firestore": { "port": 8080 },
     "storage": { "port": 9199 },
     "auth": { "port": 9099 },
+    "functions": { "port": 5001 },
     "ui": { "enabled": false }
   }
 }

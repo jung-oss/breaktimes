@@ -1,0 +1,20 @@
+{
+  "name": "breaktime-shop-functions",
+  "description": "행복-가게 서버 함수: 사랑하기 받기·쓰기, AI 결과 만들기, 도감",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
