@@ -82,47 +82,25 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
       ),
     ).then((result) {
       if (result == true) {
-        _loadTodayQuote(); // 하트 상태 재확인
+        _loadTodayQuote(); // 사랑하기 상태를 다시 확인합니다
       }
     });
   }
 
   Widget _buildQuoteCard(QuoteItem quote, bool isKorean) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 사용자의 생각 (개선된 디자인)
+        // 사용자의 생각
         Container(
+          width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDarkMode
-                  ? [
-                      Colors.blue[900]!,
-                      Colors.blue[800]!,
-                    ]
-                  : [
-                      Colors.blue.shade100,
-                      Colors.blue.shade50,
-                    ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.blue.withOpacity(0.2),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-                spreadRadius: 1,
-              ),
-            ],
-            border: Border.all(
-              color: Colors.blue.withOpacity(0.3),
-              width: 1.5,
-            ),
+            color: t.surface,
+            borderRadius: BorderRadius.circular(ShopShape.card),
+            border: Border.all(color: t.line),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,13 +110,13 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
+                      color: t.coralSoft,
+                      borderRadius: BorderRadius.circular(ShopShape.button),
                     ),
                     child: Icon(
                       Icons.psychology,
                       size: 20,
-                      color: isDarkMode ? Colors.blue[200] : Colors.blue[700],
+                      color: t.coralDeep,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -147,7 +125,7 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.blue[100] : Colors.blue[800],
+                      color: t.ink,
                     ),
                   ),
                 ],
@@ -157,7 +135,7 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                 quote.userThought,
                 style: TextStyle(
                   fontSize: 17,
-                  color: isDarkMode ? Colors.white : Colors.black87,
+                  color: t.ink,
                   height: 1.6,
                   letterSpacing: 0.2,
                 ),
@@ -166,40 +144,17 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
           ),
         ),
         const SizedBox(height: 20),
-        // 통합된 명언과 위로 글 (개선된 디자인)
+        // 명언과 위로 글
         if (quote.status == 'generated' &&
             quote.comfortMessage != null &&
             quote.comfortMessage!.isNotEmpty)
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDarkMode
-                    ? [
-                        Colors.purple[900]!,
-                        Colors.pink[900]!,
-                      ]
-                    : [
-                        Colors.purple.shade100,
-                        Colors.pink.shade100,
-                        Colors.orange.shade50,
-                      ],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.purple.withOpacity(0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                  spreadRadius: 2,
-                ),
-              ],
-              border: Border.all(
-                color: Colors.purple.withOpacity(0.4),
-                width: 2,
-              ),
+              color: t.surface,
+              borderRadius: BorderRadius.circular(ShopShape.card),
+              border: Border.all(color: t.line),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,50 +165,52 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(12),
+                        color: t.successSoft,
+                        borderRadius: BorderRadius.circular(ShopShape.button),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.auto_awesome,
-                        color: Colors.purple,
+                        color: t.onSuccessSoft,
                         size: 22,
                       ),
                     ),
                     const SizedBox(width: 12),
                     if (quote.authorName != null)
                       Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.person,
-                                color: Colors.purple,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  '${quote.authorName} 작가 스타일',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDarkMode
-                                        ? Colors.white
-                                        : Colors.purple.shade800,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: t.coralSoft,
+                              borderRadius:
+                                  BorderRadius.circular(ShopShape.chip),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.person,
+                                  color: t.coralDeep,
+                                  size: 16,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '${quote.authorName} 작가 스타일',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: t.coralDeep,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -281,14 +238,16 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                       bottom: index < lines - 1 ? (isFirstLine ? 20 : 14) : 0,
                     ),
                     child: Container(
+                      width: isFirstLine ? double.infinity : null,
                       padding: isFirstLine
                           ? const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 12)
                           : EdgeInsets.zero,
                       decoration: isFirstLine
                           ? BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(12),
+                              color: t.ground,
+                              borderRadius:
+                                  BorderRadius.circular(ShopShape.button),
                             )
                           : null,
                       child: Text(
@@ -299,7 +258,7 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                               isFirstLine ? FontWeight.bold : FontWeight.w500,
                           fontStyle:
                               isFirstLine ? FontStyle.italic : FontStyle.normal,
-                          color: isDarkMode ? Colors.white : Colors.black87,
+                          color: t.ink,
                           height: isFirstLine ? 1.5 : 1.7,
                           letterSpacing: isFirstLine ? 0.3 : 0.1,
                         ),
@@ -313,45 +272,9 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
             ),
           )
         else if (quote.status == 'pending')
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey[800] : Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  isKorean ? '글귀 생성 중...' : 'Generating quote...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: isDarkMode ? Colors.white70 : Colors.orange.shade700,
-                  ),
-                ),
-              ],
-            ),
-          )
+          ShopStatusView.pending(isKorean: isKorean)
         else if (quote.status == 'failed')
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey[800] : Colors.red.shade50,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              isKorean ? '글귀 생성에 실패했습니다.' : 'Failed to generate quote.',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDarkMode ? Colors.white70 : Colors.red.shade700,
-              ),
-            ),
-          ),
+          ShopStatusView.failed(isKorean: isKorean),
       ],
     );
   }
@@ -361,140 +284,148 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
     final languageCode =
         Provider.of<LocaleProvider>(context).locale.languageCode;
     final isKorean = languageCode == 'ko';
+    final t = ShopTokens.of(context);
 
     // 디자인 시스템: 가게 바탕은 크림색(어두운 화면은 따뜻한 갈색)
     return Container(
-      color: ShopTokens.of(context).ground,
+      color: t.ground,
       child: Column(
         children: [
           // 상단 오늘의 명언/글귀 카드 (프레임 배경 적용)
           if (_dailyQuote != null)
-            Card(
+            Container(
               margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
               clipBehavior: Clip.antiAlias,
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: 200,
+              constraints: const BoxConstraints(
+                minHeight: 200,
+              ),
+              decoration: BoxDecoration(
+                color: t.surface,
+                borderRadius: BorderRadius.circular(ShopShape.card),
+                border: Border.all(color: t.line),
+                image: const DecorationImage(
+                  image: AssetImage('assets/images/decorative_box.png'),
+                  fit: BoxFit.fill,
+                  alignment: Alignment.center,
+                  opacity: 0.15, // 투명도 15%
                 ),
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: const AssetImage('assets/images/decorative_box.png'),
-                    fit: BoxFit.fill,
-                    alignment: Alignment.center,
-                    colorFilter: ColorFilter.mode(
-                      Colors.white.withOpacity(0.15), // 투명도 15%
-                      BlendMode.modulate, // 원본 이미지와 곱해서 자연스럽게 반투명 처리
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 28,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isKorean ? '오늘의 명언' : 'Today\'s Quote',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: t.ink,
                     ),
                   ),
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 28,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      isKorean ? '오늘의 명언' : 'Today\'s Quote',
+                  const SizedBox(height: 16),
+                  Flexible(
+                    child: Text(
+                      _dailyQuote!.quote,
                       style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.brown.shade800,
+                        fontSize: 18,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                        color: t.ink,
+                        height: 1.6,
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Flexible(
-                      child: Text(
-                        _dailyQuote!.quote,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.brown.shade700,
-                          height: 1.6,
-                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      '- ${_dailyQuote!.author}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontStyle: FontStyle.italic,
+                        color: t.ink2,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '- ${_dailyQuote!.author}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.brown.shade600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           // 행복 글쓰기 카드 (항상 표시, 기록 보기 버튼 포함)
-          Card(
+          Container(
             margin: const EdgeInsets.all(16),
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: t.surface,
+              borderRadius: BorderRadius.circular(ShopShape.card),
+              border: Border.all(color: t.line),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Flexible(
+                      child: Text(
                         isKorean ? '행복 글쓰기' : 'Happiness Quote Writing',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.primary,
+                          color: t.ink,
                         ),
                       ),
-                      // 기록 보기 버튼 (항상 표시)
-                      TextButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const QuotesHistoryScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.history, size: 18),
-                        label: Text(
-                          isKorean ? '기록 보기' : 'History',
-                          style: const TextStyle(fontSize: 14),
+                    ),
+                    // 기록 보기 버튼 (항상 표시)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const QuotesHistoryScreen(),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: t.coralDeep,
+                        minimumSize: const Size(
+                            ShopShape.minTouch, ShopShape.minTouch),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(ShopShape.button),
                         ),
                       ),
-                    ],
-                  ),
-                  // 작성 버튼 (글 작성 전에만 표시)
-                  if (!_hasWrittenToday) ...[
-                    const SizedBox(height: 12),
-                    LoveButton(
-                      onPressed: _showWriteQuoteModal,
-                      label: isKorean
-                          ? '생각 적고 글귀 받기 · 사랑하기 ${HeartCost.QUOTE}개'
-                          : 'Write and get a quote · ${HeartCost.QUOTE} Love',
+                      icon: const Icon(Icons.history, size: 18),
+                      label: Text(
+                        isKorean ? '기록 보기' : 'History',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ],
+                ),
+                // 작성 버튼 (글 작성 전에만 표시)
+                if (!_hasWrittenToday) ...[
+                  const SizedBox(height: 12),
+                  LoveButton(
+                    onPressed: _showWriteQuoteModal,
+                    label: isKorean
+                        ? '생각 적고 글귀 받기 · 사랑하기 ${HeartCost.QUOTE}개'
+                        : 'Write and get a quote · ${HeartCost.QUOTE} Love',
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
           // 오늘 글귀가 있으면 표시
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Column(
                 children: [
                   if (_hasWrittenToday && _todayQuote != null)
@@ -505,17 +436,15 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(5),
+                            borderRadius:
+                                BorderRadius.circular(ShopShape.card),
                             child: Image.asset(
                               'assets/images/store/quotes_logo.png',
                               width: 300,
                               height: 300,
                               errorBuilder: (context, error, stackTrace) {
-                                return const Icon(
-                                  Icons.format_quote,
-                                  size: 100,
-                                  color: Colors.grey,
-                                );
+                                return ShopArt.pill('quotes',
+                                    size: 96, radius: 24);
                               },
                             ),
                           ),
@@ -525,7 +454,7 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                                 ? '오늘의 생각을 기록하면\nAI가 따뜻한 글귀를 만들어드려요.'
                                 : 'Record your thoughts today\nand AI will create a warm quote for you.',
                             textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey),
+                            style: TextStyle(fontSize: 15, color: t.ink2),
                           ),
                         ],
                       ),

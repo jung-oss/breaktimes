@@ -128,6 +128,7 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
   void _showContentTypeBottomSheet(VitaminSlot slot) {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (context) => VitaminContentTypeSheet(
         onTypeSelected: (type) {
           Navigator.push(
@@ -150,11 +151,11 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
     final languageCode =
         Provider.of<LocaleProvider>(context).locale.languageCode;
     final isKorean = languageCode == 'ko';
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
 
     // 디자인 시스템: 가게 바탕은 크림색(어두운 화면은 따뜻한 갈색)
     return Container(
-      color: ShopTokens.of(context).ground,
+      color: t.ground,
       child: Column(
         children: [
           // 서브 헤더
@@ -163,11 +164,11 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
             child: Column(
               children: [
                 Text(
-                  isKorean ? '✨ 오늘의 작은 반짝임' : '✨ Today\'s Little Sparkle',
+                  isKorean ? '오늘의 작은 반짝임' : 'Today\'s Little Sparkle',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: t.ink,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -181,7 +182,7 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
                           : 'Used: ${slots.where((s) => !s.isEmpty).length} / $_slotCount slots',
                       style: TextStyle(
                         fontSize: 14,
-                        color: isDarkMode ? Colors.white70 : Colors.black54,
+                        color: t.ink2,
                       ),
                     );
                   },
@@ -204,18 +205,27 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
           // 알약 그리드 레이아웃
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(child: CircularProgressIndicator(color: t.coral))
                 : StreamBuilder<List<VitaminSlot>>(
                     stream: widget.service.getUserSlotsStream(),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return Center(
+                          child: CircularProgressIndicator(color: t.coral),
+                        );
                       }
 
                       if (snapshot.hasError) {
                         return Center(
-                          child: Text(
-                            isKorean ? '오류가 발생했습니다' : 'An error occurred',
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              isKorean
+                                  ? '잠시 문제가 생겼어요. 다시 시도해 주세요.'
+                                  : 'Something went wrong. Please try again.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 16, color: t.ink2),
+                            ),
                           ),
                         );
                       }
@@ -230,18 +240,14 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
                               Icon(
                                 Icons.inventory_2_outlined,
                                 size: 64,
-                                color: isDarkMode
-                                    ? Colors.white54
-                                    : Colors.black26,
+                                color: t.ink2,
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                isKorean ? '슬롯이 없습니다' : 'No slots available',
+                                isKorean ? '아직 슬롯이 없어요' : 'No slots available',
                                 style: TextStyle(
                                   fontSize: 16,
-                                  color: isDarkMode
-                                      ? Colors.white70
-                                      : Colors.black54,
+                                  color: t.ink2,
                                 ),
                               ),
                             ],

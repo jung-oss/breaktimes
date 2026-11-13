@@ -10,12 +10,10 @@ class FlowersTabScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return CatalogTabScreen(
       service: CatalogShopService('flowers', HeartCost.FLOWERS),
-      iconEmoji: '🌸',
       titleKo: '행복 꽃말',
       titleEn: 'Happiness Flowers',
       ctaKo: '오늘의 꽃 받기',
       ctaEn: 'Get a Flower',
-      lightGradient: [Colors.pink.shade50, Colors.white],
     );
   }
 }

@@ -1,6 +1,7 @@
 // lib/happiness_shop_2/categories/vitamin/widgets/vitamin_content_type_sheet.dart
 import 'package:flutter/material.dart';
 import '../models/vitamin_slot.dart';
+import '../../../common/theme/shop_tokens.dart';
 
 class VitaminContentTypeSheet extends StatelessWidget {
   final Function(VitaminSlotType) onTypeSelected;
@@ -14,13 +15,16 @@ class VitaminContentTypeSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final languageCode = Localizations.localeOf(context).languageCode;
     final isKorean = languageCode == 'ko';
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.fromLTRB(
+          24, 24, 24, 8 + MediaQuery.of(context).viewPadding.bottom),
       decoration: BoxDecoration(
-        color: isDarkMode ? Colors.grey[900] : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: t.surface,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(ShopShape.sheet),
+        ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -29,21 +33,20 @@ class VitaminContentTypeSheet extends StatelessWidget {
           Text(
             isKorean ? '콘텐츠 타입을 선택하세요' : 'Select Content Type',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: isDarkMode ? Colors.white : Colors.black87,
+              fontSize: 22,
+              height: 30 / 22,
+              fontWeight: FontWeight.w800,
+              color: t.ink,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           _buildTypeOption(
             context,
             icon: Icons.image,
             title: isKorean ? '갤러리에서 사진 선택' : 'Photo from Gallery',
-            subtitle: isKorean
-                ? '나만의 소중한 사진을 저장하세요'
-                : 'Save your precious photos',
+            subtitle:
+                isKorean ? '나만의 소중한 사진을 저장하세요' : 'Save your precious photos',
             type: VitaminSlotType.photo,
-            color: Colors.blue,
           ),
           const SizedBox(height: 12),
           _buildTypeOption(
@@ -54,16 +57,15 @@ class VitaminContentTypeSheet extends StatelessWidget {
                 ? '나만의 소중한 영상을 저장하세요 (최대 5분)'
                 : 'Save your precious videos (max 5 min)',
             type: VitaminSlotType.video,
-            color: Colors.purple,
           ),
-          const Divider(height: 32),
+          Divider(height: 32, color: t.line),
           _buildTypeOption(
             context,
             icon: Icons.music_note,
             title: isKorean ? '음악 링크' : 'Music Link',
-            subtitle: isKorean ? 'YouTube, Spotify 등' : 'YouTube, Spotify, etc.',
+            subtitle:
+                isKorean ? 'YouTube, Spotify 등' : 'YouTube, Spotify, etc.',
             type: VitaminSlotType.music,
-            color: Colors.red,
           ),
           const SizedBox(height: 12),
           _buildTypeOption(
@@ -72,7 +74,6 @@ class VitaminContentTypeSheet extends StatelessWidget {
             title: isKorean ? '영상 링크' : 'Video Link',
             subtitle: isKorean ? 'YouTube 등' : 'YouTube, etc.',
             type: VitaminSlotType.videoUrl,
-            color: Colors.orange,
           ),
           const SizedBox(height: 12),
           _buildTypeOption(
@@ -81,7 +82,6 @@ class VitaminContentTypeSheet extends StatelessWidget {
             title: isKorean ? '명언/메시지' : 'Quote/Message',
             subtitle: isKorean ? '나만의 메시지 작성' : 'Write your own message',
             type: VitaminSlotType.quote,
-            color: Colors.green,
           ),
           const SizedBox(height: 16),
         ],
@@ -95,73 +95,66 @@ class VitaminContentTypeSheet extends StatelessWidget {
     required String title,
     required String subtitle,
     required VitaminSlotType type,
-    required Color color,
   }) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
+    final radius = BorderRadius.circular(ShopShape.card);
 
-    return InkWell(
-      onTap: () {
-        Navigator.pop(context);
-        onTypeSelected(type);
-      },
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDarkMode
-              ? Colors.grey[800]
-              : color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDarkMode
-                ? Colors.grey[700]!
-                : color.withOpacity(0.3),
+    return Material(
+      color: t.surface,
+      borderRadius: radius,
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+          onTypeSelected(type);
+        },
+        borderRadius: radius,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: ShopShape.minTouch),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(color: t.line),
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                shape: BoxShape.circle,
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: t.coralSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: t.coralDeep, size: 24),
               ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDarkMode ? Colors.white : Colors.black87,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: t.ink,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDarkMode
-                          ? Colors.white70
-                          : Colors.black54,
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 18 / 13,
+                        color: t.ink2,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Icon(
-              Icons.chevron_right,
-              color: isDarkMode ? Colors.white54 : Colors.black54,
-            ),
-          ],
+              Icon(Icons.chevron_right, color: t.ink2),
+            ],
+          ),
         ),
       ),
     );
   }
 }
-

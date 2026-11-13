@@ -1,6 +1,8 @@
 // lib/happiness_shop_2/common/widgets/pill_button.dart
 import 'package:flutter/material.dart';
 
+import '../theme/shop_tokens.dart';
+
 /// 알약 버튼 위젯 (공통)
 class PillButton extends StatefulWidget {
   final String imagePath;
@@ -47,6 +49,7 @@ class _PillButtonState extends State<PillButton>
 
   @override
   Widget build(BuildContext context) {
+    final t = ShopTokens.of(context);
     return GestureDetector(
       onTapDown: (_) => _animationController.forward(),
       onTapUp: (_) {
@@ -82,22 +85,17 @@ class _PillButtonState extends State<PillButton>
                       height: 140,
                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
+                        // 알약 사진을 못 읽으면 코랄 빈 알약으로 대신합니다
                         return Container(
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [
-                                Colors.orange.shade300,
-                                Colors.orange.shade600,
-                              ],
-                            ),
+                            color: t.coralSoft,
                             borderRadius: BorderRadius.circular(50),
+                            border: Border.all(color: t.line),
                           ),
                           child: widget.isEmpty
-                              ? const Icon(
+                              ? Icon(
                                   Icons.add,
-                                  color: Colors.white,
+                                  color: t.coralDeep,
                                   size: 40,
                                 )
                               : const SizedBox(),
@@ -108,13 +106,13 @@ class _PillButtonState extends State<PillButton>
                     if (widget.isEmpty)
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.4),
+                          color: t.ground.withAlpha(166),
                           borderRadius: BorderRadius.circular(50),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Icon(
                             Icons.add_circle_outline,
-                            color: Colors.white,
+                            color: t.coralDeep,
                             size: 48,
                           ),
                         ),
@@ -132,19 +130,13 @@ class _PillButtonState extends State<PillButton>
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: Colors.purple.shade400,
+                      color: t.coral,
                       shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.purple.withOpacity(0.5),
-                          blurRadius: 8,
-                          spreadRadius: 2,
-                        ),
-                      ],
+                      border: Border.all(color: t.surface, width: 2),
                     ),
-                    child: const Icon(
-                      Icons.star,
-                      color: Colors.white,
+                    child: Icon(
+                      Icons.auto_awesome,
+                      color: t.onCoral,
                       size: 18,
                     ),
                   ),

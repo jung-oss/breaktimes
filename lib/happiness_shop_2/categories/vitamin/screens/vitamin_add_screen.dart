@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/vitamin_slot.dart';
 import '../models/vitamin_content.dart';
 import '../services/vitamin_service.dart';
+import '../../../common/theme/shop_tokens.dart';
+import '../../../common/widgets/shop_widgets.dart';
 
 class VitaminAddScreen extends StatefulWidget {
   final VitaminSlot slot;
@@ -112,12 +114,11 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
         _isUploading = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isKorean ? '업로드 중 오류가 발생했습니다: $e' : 'Upload error: $e',
-            ),
-          ),
+        showShopToast(
+          context,
+          isKorean
+              ? '잠시 문제가 생겼어요. 다시 시도해 주세요.'
+              : 'Something went wrong. Please try again.',
         );
       }
     }
@@ -129,12 +130,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
     final isKorean = languageCode == 'ko';
 
     if (_titleController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isKorean ? '제목을 입력해주세요' : 'Please enter a title',
-          ),
-        ),
+      showShopToast(
+        context,
+        isKorean ? '제목을 입력해 주세요' : 'Please enter a title',
       );
       return;
     }
@@ -142,14 +140,11 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
     // 사진/영상의 경우 업로드가 완료되어야 함
     if ((widget.type == VitaminSlotType.photo && _uploadedImageData == null) ||
         (widget.type == VitaminSlotType.video && _uploadedVideoData == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isKorean
-                ? '사진 또는 영상을 먼저 선택해주세요'
-                : 'Please select a photo or video first',
-          ),
-        ),
+      showShopToast(
+        context,
+        isKorean
+            ? '사진 또는 영상을 먼저 선택해 주세요'
+            : 'Please select a photo or video first',
       );
       return;
     }
@@ -191,12 +186,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
         case VitaminSlotType.music:
         case VitaminSlotType.videoUrl:
           if (_urlController.text.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isKorean ? 'URL을 입력해주세요' : 'Please enter a URL',
-                ),
-              ),
+            showShopToast(
+              context,
+              isKorean ? '링크(URL)를 입력해 주세요' : 'Please enter a URL',
             );
             setState(() {
               _isLoading = false;
@@ -213,12 +205,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
 
         case VitaminSlotType.quote:
           if (_textController.text.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  isKorean ? '명언을 입력해주세요' : 'Please enter a quote',
-                ),
-              ),
+            showShopToast(
+              context,
+              isKorean ? '명언을 입력해 주세요' : 'Please enter a quote',
             );
             setState(() {
               _isLoading = false;
@@ -248,12 +237,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
 
       if (mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isKorean ? '콘텐츠가 추가되었습니다! ✨' : 'Content added! ✨',
-            ),
-          ),
+        showShopToast(
+          context,
+          isKorean ? '콘텐츠를 담았어요' : 'Content added',
         );
       }
     } catch (e) {
@@ -261,12 +247,11 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
         setState(() {
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              isKorean ? '오류가 발생했습니다: $e' : 'An error occurred: $e',
-            ),
-          ),
+        showShopToast(
+          context,
+          isKorean
+              ? '잠시 문제가 생겼어요. 다시 시도해 주세요.'
+              : 'Something went wrong. Please try again.',
         );
       }
     }
@@ -276,8 +261,10 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
   Widget build(BuildContext context) {
     final languageCode = Localizations.localeOf(context).languageCode;
     final isKorean = languageCode == 'ko';
+    final t = ShopTokens.of(context);
 
     return Scaffold(
+      backgroundColor: t.ground,
       appBar: AppBar(
         title: Text(isKorean ? '콘텐츠 추가' : 'Add Content'),
         actions: [
@@ -300,6 +287,7 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                   widget.type != VitaminSlotType.video))
             IconButton(
               icon: const Icon(Icons.check),
+              tooltip: isKorean ? '저장' : 'Save',
               onPressed: _saveContent,
             ),
         ],
@@ -311,9 +299,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
           children: [
             TextField(
               controller: _titleController,
-              decoration: InputDecoration(
+              decoration: _inputDecoration(
+                context,
                 labelText: isKorean ? '제목' : 'Title',
-                border: const OutlineInputBorder(),
               ),
               enabled: !_isLoading,
             ),
@@ -321,13 +309,13 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
             // 메모 입력 필드 (항상 표시)
             TextField(
               controller: _memoController,
-              decoration: InputDecoration(
+              decoration: _inputDecoration(
+                context,
                 labelText: isKorean ? '메모 (선택사항)' : 'Memo (Optional)',
                 hintText: isKorean
                     ? '이 콘텐츠에 대한 간단한 메모를 작성해주세요...'
                     : 'Write a brief memo about this content...',
-                border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.note),
+                prefixIcon: const Icon(Icons.sticky_note_2_outlined),
               ),
               maxLines: 5,
               enabled: !_isLoading,
@@ -341,9 +329,73 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
     );
   }
 
+  /// 입력칸 모양: 모서리 14, 고르면 coralDeep 테두리
+  InputDecoration _inputDecoration(
+    BuildContext context, {
+    String? labelText,
+    String? hintText,
+    Widget? prefixIcon,
+  }) {
+    final t = ShopTokens.of(context);
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(ShopShape.button),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      prefixIcon: prefixIcon,
+      filled: true,
+      fillColor: t.surface,
+      labelStyle: TextStyle(fontSize: 16, color: t.ink2),
+      floatingLabelStyle: TextStyle(color: t.coralDeep),
+      hintStyle: TextStyle(fontSize: 15, color: t.ink2),
+      prefixIconColor: t.ink2,
+      border: border(t.line),
+      enabledBorder: border(t.line),
+      disabledBorder: border(t.line),
+      focusedBorder: border(t.coralDeep, 1.5),
+    );
+  }
+
+  /// 사진·영상 고르기 버튼(사랑하기를 쓰지 않습니다)
+  Widget _buildPickButton({required IconData icon, required String label}) {
+    final t = ShopTokens.of(context);
+    return SizedBox(
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed: _isUploading ? null : _pickAndUploadMedia,
+        icon: _isUploading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: t.ink2,
+                ),
+              )
+            : Icon(icon, size: 20),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: t.coral,
+          foregroundColor: t.onCoral,
+          disabledBackgroundColor: t.line,
+          disabledForegroundColor: t.ink2,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(ShopShape.button),
+          ),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTypeSpecificFields() {
     final languageCode = Localizations.localeOf(context).languageCode;
     final isKorean = languageCode == 'ko';
+    final t = ShopTokens.of(context);
 
     switch (widget.type) {
       case VitaminSlotType.photo:
@@ -352,22 +404,11 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
           children: [
             // 사진 선택 버튼
             if (_uploadedImageData == null)
-              ElevatedButton.icon(
-                onPressed: _isUploading ? null : _pickAndUploadMedia,
-                icon: _isUploading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.image),
-                label: Text(
-                  _isUploading
-                      ? (isKorean ? '업로드 중...' : 'Uploading...')
-                      : (isKorean
-                          ? '갤러리에서 사진 선택'
-                          : 'Select Photo from Gallery'),
-                ),
+              _buildPickButton(
+                icon: Icons.image,
+                label: (_isUploading
+                    ? (isKorean ? '업로드 중...' : 'Uploading...')
+                    : (isKorean ? '갤러리에서 사진 선택' : 'Select Photo from Gallery')),
               )
             else
               // 업로드된 사진 미리보기 및 메모 입력
@@ -377,25 +418,26 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                   Container(
                     height: 200,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: t.line,
+                      borderRadius: BorderRadius.circular(ShopShape.card),
+                      border: Border.all(color: t.line),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(ShopShape.card),
                       child: Image.network(
                         _uploadedImageData!['imageUrl'] ?? '',
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Center(
-                            child: Icon(Icons.image, size: 64),
+                          return Center(
+                            child: Icon(Icons.image, size: 64, color: t.ink2),
                           );
                         },
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   // 다시 선택 버튼
-                  OutlinedButton.icon(
+                  ShopOutlineButton(
                     onPressed: _isLoading
                         ? null
                         : () {
@@ -404,10 +446,8 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                               _memoController.clear();
                             });
                           },
-                    icon: const Icon(Icons.refresh),
-                    label: Text(
-                      isKorean ? '다시 선택' : 'Select Again',
-                    ),
+                    icon: Icons.refresh,
+                    label: isKorean ? '다시 선택' : 'Select Again',
                   ),
                 ],
               ),
@@ -420,22 +460,11 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
           children: [
             // 영상 선택 버튼
             if (_uploadedVideoData == null)
-              ElevatedButton.icon(
-                onPressed: _isUploading ? null : _pickAndUploadMedia,
-                icon: _isUploading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.videocam),
-                label: Text(
-                  _isUploading
-                      ? (isKorean ? '업로드 중...' : 'Uploading...')
-                      : (isKorean
-                          ? '갤러리에서 영상 선택'
-                          : 'Select Video from Gallery'),
-                ),
+              _buildPickButton(
+                icon: Icons.videocam,
+                label: (_isUploading
+                    ? (isKorean ? '업로드 중...' : 'Uploading...')
+                    : (isKorean ? '갤러리에서 영상 선택' : 'Select Video from Gallery')),
               )
             else
               // 업로드된 영상 미리보기 및 메모 입력
@@ -445,9 +474,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                   Container(
                     height: 200,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(ShopShape.card),
+                      border: Border.all(color: t.line),
+                      color: t.line,
                     ),
                     child: Stack(
                       alignment: Alignment.center,
@@ -455,26 +484,27 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                         // 썸네일이 있으면 표시
                         if (_uploadedVideoData!['thumbnailUrl'] != null)
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(ShopShape.card),
                             child: Image.network(
                               _uploadedVideoData!['thumbnailUrl'] ?? '',
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
                               errorBuilder: (context, error, stackTrace) {
-                                return const Center(
-                                  child: Icon(Icons.videocam, size: 64),
+                                return Center(
+                                  child: Icon(Icons.videocam,
+                                      size: 64, color: t.ink2),
                                 );
                               },
                             ),
                           )
                         else
-                          const Icon(Icons.videocam, size: 64),
-                        // 재생 아이콘
+                          Icon(Icons.videocam, size: 64, color: t.ink2),
+                        // 재생 아이콘(영상 위 표시라 어두운 막을 둡니다)
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
+                            color: Colors.black.withAlpha(153),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -486,9 +516,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   // 다시 선택 버튼
-                  OutlinedButton.icon(
+                  ShopOutlineButton(
                     onPressed: _isLoading
                         ? null
                         : () {
@@ -497,10 +527,8 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
                               _memoController.clear();
                             });
                           },
-                    icon: const Icon(Icons.refresh),
-                    label: Text(
-                      isKorean ? '다시 선택' : 'Select Again',
-                    ),
+                    icon: Icons.refresh,
+                    label: isKorean ? '다시 선택' : 'Select Again',
                   ),
                 ],
               ),
@@ -511,12 +539,12 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
       case VitaminSlotType.videoUrl:
         return TextField(
           controller: _urlController,
-          decoration: InputDecoration(
+          decoration: _inputDecoration(
+            context,
             labelText: isKorean ? 'URL' : 'URL',
             hintText: isKorean
                 ? 'https://youtube.com/...'
                 : 'https://youtube.com/...',
-            border: const OutlineInputBorder(),
           ),
           enabled: !_isLoading,
           keyboardType: TextInputType.url,
@@ -528,9 +556,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
           children: [
             TextField(
               controller: _textController,
-              decoration: InputDecoration(
+              decoration: _inputDecoration(
+                context,
                 labelText: isKorean ? '명언/메시지' : 'Quote/Message',
-                border: const OutlineInputBorder(),
               ),
               maxLines: 5,
               enabled: !_isLoading,
@@ -538,9 +566,9 @@ class _VitaminAddScreenState extends State<VitaminAddScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _authorController,
-              decoration: InputDecoration(
+              decoration: _inputDecoration(
+                context,
                 labelText: isKorean ? '출처 (선택사항)' : 'Author (Optional)',
-                border: const OutlineInputBorder(),
               ),
               enabled: !_isLoading,
             ),

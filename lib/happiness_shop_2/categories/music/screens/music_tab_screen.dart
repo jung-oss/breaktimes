@@ -10,12 +10,10 @@ class MusicTabScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return CatalogTabScreen(
       service: CatalogShopService('music', HeartCost.MUSIC),
-      iconEmoji: '🎵',
       titleKo: '행복 음악',
       titleEn: 'Happiness Music',
       ctaKo: '오늘의 추천 받기',
       ctaEn: 'Get Recommendation',
-      lightGradient: [Colors.purple.shade50, Colors.white],
       filterTags: const ['calm', 'hope'],
       filterLabelsKo: const ['고요', '응원'],
       filterLabelsEn: const ['Calm', 'Hope'],

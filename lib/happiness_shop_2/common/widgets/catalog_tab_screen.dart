@@ -13,15 +13,11 @@ import 'shop_widgets.dart';
 class CatalogTabScreen extends StatefulWidget {
   final CatalogShopService service;
 
-  /// 예전 머리글용 이모지. 디자인 시스템에서는 알약 사진을 쓰므로 쓰지 않습니다.
-  final String iconEmoji;
   final String titleKo;
   final String titleEn;
   final String ctaKo;
   final String ctaEn;
 
-  /// 예전 배경 그라데이션. 디자인 시스템에서는 크림 바탕을 쓰므로 쓰지 않습니다.
-  final List<Color> lightGradient;
   final List<String>? filterTags;
   final List<String>? filterLabelsKo;
   final List<String>? filterLabelsEn;
@@ -29,12 +25,10 @@ class CatalogTabScreen extends StatefulWidget {
   const CatalogTabScreen({
     super.key,
     required this.service,
-    required this.iconEmoji,
     required this.titleKo,
     required this.titleEn,
     required this.ctaKo,
     required this.ctaEn,
-    required this.lightGradient,
     this.filterTags,
     this.filterLabelsKo,
     this.filterLabelsEn,

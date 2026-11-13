@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../models/vitamin_slot.dart';
 import '../services/vitamin_service.dart';
+import '../../../common/theme/shop_tokens.dart';
 import '../../../common/widgets/pill_button.dart';
 
 class VitaminRandomSlotWidget extends StatefulWidget {
@@ -80,17 +81,21 @@ class _VitaminRandomSlotWidgetState extends State<VitaminRandomSlotWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final t = ShopTokens.of(context);
+    final placeholder = BoxDecoration(
+      color: t.surface,
+      borderRadius: BorderRadius.circular(50),
+      border: Border.all(color: t.line),
+    );
+
     if (_isLoading) {
       return Container(
         width: 100,
         height: 140,
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(),
+        decoration: placeholder,
+        child: Center(
+          child: CircularProgressIndicator(color: t.coral),
         ),
       );
     }
@@ -100,12 +105,9 @@ class _VitaminRandomSlotWidgetState extends State<VitaminRandomSlotWidget> {
         width: 100,
         height: 140,
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: const Center(
-          child: Icon(Icons.refresh, color: Colors.grey),
+        decoration: placeholder,
+        child: Center(
+          child: Icon(Icons.refresh, color: t.ink2),
         ),
       );
     }
@@ -127,4 +129,3 @@ class _VitaminRandomSlotWidgetState extends State<VitaminRandomSlotWidget> {
     );
   }
 }
-

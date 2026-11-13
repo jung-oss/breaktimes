@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../models/vitamin_slot.dart';
 import '../services/vitamin_service.dart';
+import '../../../common/theme/shop_tokens.dart';
 import '../../../common/widgets/pill_button.dart';
 import 'vitamin_random_slot_widget.dart';
 
@@ -41,7 +42,7 @@ class VitaminSlotGrid extends StatelessWidget {
     }
   }
 
-  Widget? _buildContentIcon(VitaminSlot slot) {
+  Widget? _buildContentIcon(BuildContext context, VitaminSlot slot) {
     if (slot.isEmpty) return null;
 
     IconData iconData;
@@ -65,22 +66,28 @@ class VitaminSlotGrid extends StatelessWidget {
         return null;
     }
 
+    final t = ShopTokens.of(context);
     return Positioned(
       bottom: 8,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
-          shape: BoxShape.circle,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: t.surface,
+            shape: BoxShape.circle,
+            border: Border.all(color: t.line),
+          ),
+          child: Icon(iconData, color: t.coralDeep, size: 22),
         ),
-        child: Icon(iconData, color: Colors.white, size: 24),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
     final languageCode = Localizations.localeOf(context).languageCode;
     final isKorean = languageCode == 'ko';
 
@@ -107,7 +114,7 @@ class VitaminSlotGrid extends StatelessWidget {
                 imagePath: _getPillImagePath(slot.slotIndex),
                 onTap: () => onSlotTap(slot),
                 isEmpty: slot.isEmpty,
-                overlay: _buildContentIcon(slot),
+                overlay: _buildContentIcon(context, slot),
                 showBadge: slot.content.aiQuote != null &&
                     slot.content.aiQuote!.isNotEmpty,
               );
@@ -119,11 +126,11 @@ class VitaminSlotGrid extends StatelessWidget {
             child: Column(
               children: [
                 Text(
-                  isKorean ? '🎲 랜덤 슬롯' : '🎲 Random Slot',
+                  isKorean ? '랜덤 슬롯' : 'Random Slot',
                   style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.black87,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: t.ink,
                   ),
                 ),
                 const SizedBox(height: 16),

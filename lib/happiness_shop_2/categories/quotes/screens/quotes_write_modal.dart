@@ -6,6 +6,7 @@ import '../services/quotes_service.dart';
 import '../models/quote_item.dart';
 import '../../../common/services/heart_cost_service.dart';
 import '../../../common/widgets/shop_widgets.dart';
+import '../../../common/theme/shop_tokens.dart';
 
 class QuotesWriteModal extends StatefulWidget {
   final QuotesService service;
@@ -100,13 +101,13 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
 
     try {
       if (widget.existingQuote != null) {
-        // 기존 글귀 수정 (하트 소진 없음)
+        // 기존 글귀 수정(사랑하기를 쓰지 않습니다)
         await widget.service.updateQuote(
           widget.existingQuote!.id,
           _thoughtController.text.trim(),
         );
       } else {
-        // 새 글귀 생성 (하트 소진)
+        // 새 글귀 생성(사랑하기를 씁니다)
         await widget.service.createQuoteFromThought(
           _thoughtController.text.trim(),
         );
@@ -130,7 +131,7 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
           _isSubmitting = false;
         });
 
-        // 하트 부족 오류 처리
+        // 사랑하기 부족 오류 처리
         if (e.toString().contains('INSUFFICIENT_HEARTS')) {
           _showSnackBar(
             isKorean
@@ -157,12 +158,27 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
     }
   }
 
+
+  // 알림은 가게 공통 모양을 씁니다(오류도 빨간색 없이 같은 모양입니다)
   void _showSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
+    final t = ShopTokens.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isError ? t.surface : t.successSoft,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(ShopShape.button),
+          side: BorderSide(color: isError ? t.line : t.successSoft),
+        ),
+        content: Text(
+          message,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: isError ? t.ink2 : t.onSuccessSoft,
+          ),
+        ),
         duration: const Duration(seconds: 2),
       ),
     );
@@ -173,6 +189,7 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
     final languageCode =
         Provider.of<LocaleProvider>(context).locale.languageCode;
     final isKorean = languageCode == 'ko';
+    final t = ShopTokens.of(context);
     final mediaQuery = MediaQuery.of(context);
     final keyboardHeight = mediaQuery.viewInsets.bottom;
     final statusBarHeight = mediaQuery.padding.top;
@@ -183,21 +200,21 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
       body: SafeArea(
         child: Container(
           height: modalHeight,
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            color: t.ground,
+            borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(ShopShape.sheet)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Modal header
               Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(20)),
+                  color: t.surface,
+                  border: Border(bottom: BorderSide(color: t.line)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,27 +222,41 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          isKorean ? '오늘의 생각 기록하기' : 'Record Today\'s Thought',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            isKorean
+                                ? '오늘의 생각 기록하기'
+                                : 'Record Today\'s Thought',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: t.ink,
+                            ),
                           ),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
+                          color: t.ink2,
+                          constraints: const BoxConstraints(
+                            minWidth: ShopShape.minTouch,
+                            minHeight: ShopShape.minTouch,
+                          ),
+                          tooltip: isKorean ? '닫기' : 'Close',
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      isKorean
-                          ? '생각을 적으면 AI가 따뜻한 글귀를 만들어드려요.'
-                          : 'Write your thoughts and AI will create a warm quote for you.',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Text(
+                        isKorean
+                            ? '생각을 적으면 AI가 따뜻한 글귀를 만들어드려요.'
+                            : 'Write your thoughts and AI will create a warm quote for you.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: t.ink2,
+                        ),
                       ),
                     ),
                   ],
@@ -250,18 +281,20 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
                         // Thought input
                         Text(
                           isKorean ? '오늘의 생각' : 'Today\'s Thought',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
+                            color: t.ink,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Container(
                           decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(12),
+                            color: t.surface,
+                            borderRadius:
+                                BorderRadius.circular(ShopShape.button),
                             border: Border.all(
-                              color: Colors.grey.withOpacity(0.3),
+                              color: t.line,
                               width: 1,
                             ),
                           ),
@@ -275,10 +308,17 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
                             minLines: 10,
                             keyboardType: TextInputType.multiline,
                             textAlignVertical: TextAlignVertical.top,
+                            cursorColor: t.coralDeep,
+                            style: TextStyle(
+                              fontSize: 16,
+                              height: 1.6,
+                              color: t.ink,
+                            ),
                             decoration: InputDecoration(
                               hintText: isKorean
                                   ? '오늘 하루 어떤 생각이 들었나요?\n자유롭게 적어보세요...'
                                   : 'What thoughts did you have today?\nWrite freely...',
+                              hintStyle: TextStyle(color: t.ink2),
                               border: InputBorder.none,
                               contentPadding: const EdgeInsets.all(16),
                             ),
@@ -298,43 +338,18 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
                   left: 16,
                   right: 16,
                   bottom: 16,
-                  top: 8,
+                  top: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      spreadRadius: 0,
-                      blurRadius: 4,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
+                  color: t.surface,
+                  border: Border(top: BorderSide(color: t.line)),
                 ),
-                child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitThought,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ))
-                      : Text(
-                          isKorean ? '저장하기' : 'Save',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                // 새 글귀는 사랑하기를 쓰고, 수정은 무료입니다
+                child: LoveButton(
+                  isLoading: _isSubmitting,
+                  showHeart: widget.existingQuote == null,
+                  onPressed: _submitThought,
+                  label: isKorean ? '저장하기' : 'Save',
                 ),
               ),
             ],

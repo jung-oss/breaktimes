@@ -10,12 +10,10 @@ class TravelTabScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return CatalogTabScreen(
       service: CatalogShopService('travel', HeartCost.TRAVEL),
-      iconEmoji: '✈️',
       titleKo: '행복 여행',
       titleEn: 'Happiness Travel',
       ctaKo: '여행 추천 받기',
       ctaEn: 'Get Travel Idea',
-      lightGradient: [Colors.blue.shade50, Colors.white],
       filterTags: const ['walk', 'imagine'],
       filterLabelsKo: const ['근처 산책', '상상 여행'],
       filterLabelsEn: const ['Local Walk', 'Imaginary Trip'],

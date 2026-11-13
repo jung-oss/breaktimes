@@ -10,12 +10,10 @@ class RecipeTabScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return CatalogTabScreen(
       service: CatalogShopService('recipe', HeartCost.RECIPE),
-      iconEmoji: '🍰',
       titleKo: '행복 레시피',
       titleEn: 'Happiness Recipe',
       ctaKo: '레시피 추천 받기',
       ctaEn: 'Get Recipe',
-      lightGradient: [Colors.orange.shade50, Colors.white],
       filterTags: const ['quick', 'warm'],
       filterLabelsKo: const ['빠른', '따뜻한'],
       filterLabelsEn: const ['Quick', 'Warm'],
