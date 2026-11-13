@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../../services/environment_service.dart';
 import '../../../utils/logger.dart';
+import 'ai_result.dart';
 
 /// AI 명언 생성 공통 서비스
 class GeminiQuoteService {
@@ -20,13 +21,18 @@ class GeminiQuoteService {
     );
   }
 
-  /// 명언 생성
+  /// 명언 생성 (실패하면 기본 문장)
   Future<String> generateQuote(String userContent, DateTime date) async {
+    return (await generateQuoteResult(userContent, date)).text;
+  }
+
+  /// 명언 생성. 기본 문장을 돌려주었는지(isFallback)도 함께 알려 줍니다.
+  Future<AiResult> generateQuoteResult(String userContent, DateTime date) async {
     final apiKey = EnvironmentService.instance.get('GEMIN_API_KEY_SHOP');
 
     if (apiKey.isEmpty) {
       Logger.warn('GeminiQuoteService: API 키가 설정되지 않음');
-      return _getDefaultQuote();
+      return AiResult.fallback(_getDefaultQuote());
     }
 
     final prompt = _buildPrompt(userContent, date);
@@ -36,7 +42,7 @@ class GeminiQuoteService {
         final response = await _callGeminiAPI(apiKey, prompt);
 
         if (response.isNotEmpty) {
-          return response;
+          return AiResult.generated(response);
         }
 
         if (attempt < _maxRetries - 1) {
@@ -46,13 +52,13 @@ class GeminiQuoteService {
         Logger.error(
             'GeminiQuoteService: API 호출 실패 (시도 ${attempt + 1}/$_maxRetries): $e');
         if (attempt == _maxRetries - 1) {
-          return _getDefaultQuote();
+          return AiResult.fallback(_getDefaultQuote());
         }
         await Future.delayed(_retryDelay * (attempt + 1));
       }
     }
 
-    return _getDefaultQuote();
+    return AiResult.fallback(_getDefaultQuote());
   }
 
   /// 프롬프트 생성 (개선된 버전)

@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../../../providers/locale_provider.dart';
 import '../services/quotes_service.dart';
 import '../models/quote_item.dart';
+import '../../../common/services/heart_cost_service.dart';
+import '../../../common/widgets/shop_widgets.dart';
 
 class QuotesWriteModal extends StatefulWidget {
   final QuotesService service;
@@ -74,6 +76,24 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
 
+    // 새 글귀는 사랑하기를 쓰기 전에 확인합니다(수정은 무료)
+    if (widget.existingQuote == null) {
+      try {
+        final ok = await confirmLoveSpend(
+          context,
+          isKorean: isKorean,
+          categoryId: 'quotes',
+          title: isKorean ? '글귀를 받을까요?' : 'Get your quote?',
+          cost: HeartCost.QUOTE,
+          chargeAfterResult: true,
+        );
+        if (!ok || !mounted) return;
+      } catch (e) {
+        if (mounted) showShopError(context, e, isKorean);
+        return;
+      }
+    }
+
     setState(() {
       _isSubmitting = true;
     });
@@ -114,13 +134,22 @@ class _QuotesWriteModalState extends State<QuotesWriteModal> {
         if (e.toString().contains('INSUFFICIENT_HEARTS')) {
           _showSnackBar(
             isKorean
-                ? '하트가 부족합니다. 하트를 충전해주세요.'
-                : 'Insufficient hearts. Please charge hearts.',
+                ? '사랑하기가 모자라요. 행복-미션이나 행복-함으로 모을 수 있어요.'
+                : 'Not enough Love. Missions and Happy Box earn more.',
+            isError: true,
+          );
+        } else if (e.toString().contains('NETWORK_ERROR')) {
+          _showSnackBar(
+            isKorean
+                ? '연결이 불안정해요. 사랑하기는 빠지지 않았어요. 잠시 후 다시 시도해 주세요.'
+                : 'Connection problem. No Love was used. Please try again shortly.',
             isError: true,
           );
         } else {
           _showSnackBar(
-            '${isKorean ? '오류' : 'Error'}: $e',
+            isKorean
+                ? '잠시 문제가 생겼어요. 다시 시도해 주세요.'
+                : 'Something went wrong. Please try again.',
             isError: true,
           );
         }

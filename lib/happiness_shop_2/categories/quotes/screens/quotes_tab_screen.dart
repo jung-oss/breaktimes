@@ -9,6 +9,8 @@ import 'quotes_history_screen.dart';
 import '../../../common/services/heart_cost_service.dart';
 import '../services/firebase_daily_quotes_service.dart';
 import '../models/daily_quote.dart';
+import '../../../common/widgets/shop_widgets.dart';
+import '../../../common/theme/shop_tokens.dart';
 
 class QuotesTabScreen extends StatefulWidget {
   const QuotesTabScreen({super.key});
@@ -19,19 +21,18 @@ class QuotesTabScreen extends StatefulWidget {
 
 class _QuotesTabScreenState extends State<QuotesTabScreen> {
   final QuotesService _service = QuotesService();
-  final HeartCostService _heartCostService = HeartCostService();
   final FirebaseDailyQuotesService _firebaseDailyQuotesService =
       FirebaseDailyQuotesService();
   QuoteItem? _todayQuote;
   bool _hasWrittenToday = false;
-  bool _hasEnoughHearts = true;
   DailyQuote? _dailyQuote;
 
   @override
   void initState() {
     super.initState();
     _loadTodayQuote();
-    _checkHeartAvailability();
+    // 앱이 꺼져 'pending'에 멈춘 글귀를 이어서 만듭니다
+    _service.resumePending();
     _loadDailyQuote();
   }
 
@@ -50,15 +51,6 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
           _dailyQuote = null;
         });
       }
-    }
-  }
-
-  Future<void> _checkHeartAvailability() async {
-    final canAfford = await _heartCostService.canAfford(HeartCost.QUOTE);
-    if (mounted) {
-      setState(() {
-        _hasEnoughHearts = canAfford;
-      });
     }
   }
 
@@ -90,8 +82,7 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
       ),
     ).then((result) {
       if (result == true) {
-        _loadTodayQuote();
-        _checkHeartAvailability(); // 하트 상태 재확인
+        _loadTodayQuote(); // 하트 상태 재확인
       }
     });
   }
@@ -370,28 +361,10 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
     final languageCode =
         Provider.of<LocaleProvider>(context).locale.languageCode;
     final isKorean = languageCode == 'ko';
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // 디자인 시스템: 가게 바탕은 크림색(어두운 화면은 따뜻한 갈색)
     return Container(
-      decoration: BoxDecoration(
-        gradient: isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.grey[900]!,
-                  Colors.grey[850]!,
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.white,
-                ],
-              ),
-      ),
+      color: ShopTokens.of(context).ground,
       child: Column(
         children: [
           // 상단 오늘의 명언/글귀 카드 (프레임 배경 적용)
@@ -507,61 +480,11 @@ class _QuotesTabScreenState extends State<QuotesTabScreen> {
                   // 작성 버튼 (글 작성 전에만 표시)
                   if (!_hasWrittenToday) ...[
                     const SizedBox(height: 12),
-                    Column(
-                      children: [
-                        ElevatedButton(
-                          onPressed: _hasEnoughHearts
-                              ? _showWriteQuoteModal
-                              : () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        isKorean
-                                            ? '하트가 부족합니다. 하트를 충전해주세요.'
-                                            : 'Insufficient hearts. Please charge hearts.',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                },
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 48),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            backgroundColor:
-                                _hasEnoughHearts ? null : Colors.grey,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (!_hasEnoughHearts)
-                                const Icon(Icons.favorite_border, size: 18),
-                              if (!_hasEnoughHearts) const SizedBox(width: 8),
-                              Text(
-                                isKorean
-                                    ? '기록하기 (하트 ${HeartCost.QUOTE}개)'
-                                    : 'Write (${HeartCost.QUOTE} Hearts)',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (!_hasEnoughHearts)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: Text(
-                              isKorean ? '하트가 부족합니다' : 'Insufficient hearts',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.red.shade700,
-                              ),
-                            ),
-                          ),
-                      ],
+                    LoveButton(
+                      onPressed: _showWriteQuoteModal,
+                      label: isKorean
+                          ? '생각 적고 글귀 받기 · 사랑하기 ${HeartCost.QUOTE}개'
+                          : 'Write and get a quote · ${HeartCost.QUOTE} Love',
                     ),
                   ],
                 ],

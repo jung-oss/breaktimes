@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/vitamin_slot.dart';
 import '../models/vitamin_content.dart';
 import '../../../common/services/gemini_quote_service.dart';
+import '../../../common/services/love_ledger.dart';
 
 /// 행복 비타민 서비스 (기존 슬롯 시스템)
 class VitaminService {
@@ -39,8 +40,10 @@ class VitaminService {
 
   /// 슬롯 구매
   Future<bool> purchaseSlot() async {
+    LoveLedgerEntry? spent;
     try {
-      return await _firestore.runTransaction<bool>((transaction) async {
+      final ok = await _firestore.runTransaction<bool>((transaction) async {
+        spent = null;
         final userRef = _firestore.collection('users').doc(userId);
         final userDoc = await transaction.get(userRef);
 
@@ -65,9 +68,20 @@ class VitaminService {
           'slotCount': currentSlots + 1,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        final entry = LoveLedgerEntry(
+          isEarn: false,
+          amount: SLOT_PRICE,
+          reason: LoveReason.vitaminSlot,
+          balanceAfter: (currentHearts as num).toInt() - SLOT_PRICE,
+        );
+        LoveLedger.write(transaction, _firestore, userId, entry);
+        spent = entry;
 
         return true;
       });
+      final entry = spent;
+      if (ok && entry != null) LoveLedger.track(entry);
+      return ok;
     } catch (e) {
       return false;
     }
@@ -81,14 +95,36 @@ class VitaminService {
         .orderBy('slotIndex')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => VitaminSlot.fromFirestore(doc))
-          .toList();
+      // 예전에 같은 번호 슬롯이 여러 개 생긴 경우, 빈 슬롯 복사본만 숨깁니다.
+      // 내용이 있는 슬롯은 하나도 숨기지 않습니다.
+      final groups = <int, List<VitaminSlot>>{};
+      for (final doc in snapshot.docs) {
+        final slot = VitaminSlot.fromFirestore(doc);
+        groups.putIfAbsent(slot.slotIndex, () => []).add(slot);
+      }
+      final slots = <VitaminSlot>[];
+      for (final index in groups.keys.toList()..sort()) {
+        final group = groups[index]!;
+        final filled = group.where((slot) => !slot.isEmpty).toList();
+        slots.addAll(filled.isNotEmpty ? filled : [group.first]);
+      }
+      return slots;
     });
   }
 
+  /// 이 앱에서 진행 중인 슬롯 초기화(두 화면이 동시에 불러도 한 번만 실행)
+  static Future<void>? _initializing;
+
   /// 빈 슬롯 초기화
-  Future<void> initializeEmptySlots(int slotCount) async {
+  Future<void> initializeEmptySlots(int slotCount) {
+    final running = _initializing;
+    if (running != null) return running;
+    final future = _initializeEmptySlots(slotCount);
+    _initializing = future;
+    return future.whenComplete(() => _initializing = null);
+  }
+
+  Future<void> _initializeEmptySlots(int slotCount) async {
     try {
       final existingSlots = await _firestore
           .collection('happiness_slots')
@@ -130,9 +166,10 @@ class VitaminService {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 5000,
-        maxHeight: 5000,
-        imageQuality: 85,
+        // 스토리지 규칙 한도(5MB) 안에 들도록 미리 줄입니다
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
       );
 
       if (pickedFile == null) return null;
@@ -140,8 +177,8 @@ class VitaminService {
       final file = File(pickedFile.path);
       final fileSize = await file.length();
 
-      if (fileSize > 10 * 1024 * 1024) {
-        throw Exception('Image size must be less than 10MB');
+      if (fileSize > 5 * 1024 * 1024) {
+        throw Exception('Image size must be less than 5MB');
       }
 
       return await _uploadImage(file, slotId);
@@ -161,14 +198,9 @@ class VitaminService {
         SettableMetadata(contentType: 'image/jpeg'),
       );
 
-      final thumbnailRef = _storage.ref('$basePath/${slotId}_thumbnail.jpg');
-      await thumbnailRef.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
+      // 썸네일을 따로 만들 도구가 없어, 같은 파일을 두 번 올리지 않고 본 이미지 주소를 씁니다
       final compressedUrl = await compressedRef.getDownloadURL();
-      final thumbnailUrl = await thumbnailRef.getDownloadURL();
+      final thumbnailUrl = compressedUrl;
 
       return {
         'storageUrl':
@@ -216,9 +248,10 @@ class VitaminService {
         SettableMetadata(contentType: 'video/mp4'),
       );
 
-      final thumbnailRef = _storage.ref('$basePath/${slotId}_thumbnail.jpg');
+      // 전에는 올리지 않은 썸네일 주소를 읽어 업로드가 늘 실패했습니다.
+      // 영상 썸네일은 만들 도구가 없으므로 비워 둡니다(화면은 썸네일이 없으면 그리지 않음).
       final compressedUrl = await compressedRef.getDownloadURL();
-      final thumbnailUrl = await thumbnailRef.getDownloadURL();
+      const String? thumbnailUrl = null;
 
       return {
         'storageUrl':

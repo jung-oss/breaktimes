@@ -7,6 +7,7 @@ import '../core/localization/app_localizations.dart';
 import '../routes/app_router.dart'; // 라우터 import
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../happiness_shop_2/screens/love_wallet_screen.dart';
 
 class CustomDrawer extends StatefulWidget {
   final int currentIndex;
@@ -485,15 +486,17 @@ class _CustomDrawerState extends State<CustomDrawer> {
                 ? '사랑하기 $_heartCount'
                 : 'Love $_heartCount'),
             onTap: _incrementHeart,
-            trailing: Chip(
-              label: Text(
-                _heartCount.toString(),
-                style: const TextStyle(color: Colors.white),
-              ),
-              backgroundColor: _hasGivenHeartToday
-                  ? Colors.red.shade400
-                  : Colors.grey.shade400,
-              padding: const EdgeInsets.all(4),
+            // 오른쪽 버튼: 사랑하기 지갑(받고 쓴 기록)
+            trailing: IconButton(
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              tooltip: localizations.localeName.startsWith('ko')
+                  ? '사랑하기 지갑'
+                  : 'Love wallet',
+              onPressed: () {
+                final navigator = Navigator.of(context);
+                context.pop();
+                navigator.push(LoveWalletScreen.route());
+              },
             ),
           ),
         ],

@@ -3,16 +3,21 @@ import 'package:provider/provider.dart';
 import '../../../providers/locale_provider.dart';
 import '../models/shop_catalog_item.dart';
 import '../services/catalog_shop_service.dart';
-import '../services/heart_cost_service.dart';
+import '../theme/shop_tokens.dart';
+import 'shop_widgets.dart';
 
 /// 카탈로그형 행복상점 탭 (음악·꽃말·레시피·여행)
 class CatalogTabScreen extends StatefulWidget {
   final CatalogShopService service;
+
+  /// 예전 머리글용 이모지. 디자인 시스템에서는 알약 사진을 쓰므로 쓰지 않습니다.
   final String iconEmoji;
   final String titleKo;
   final String titleEn;
   final String ctaKo;
   final String ctaEn;
+
+  /// 예전 배경 그라데이션. 디자인 시스템에서는 크림 바탕을 쓰므로 쓰지 않습니다.
   final List<Color> lightGradient;
   final List<String>? filterTags;
   final List<String>? filterLabelsKo;
@@ -39,54 +44,37 @@ class CatalogTabScreen extends StatefulWidget {
 class _CatalogTabScreenState extends State<CatalogTabScreen> {
   ShopCatalogItem? _todayResult;
   bool _isLoading = false;
-  bool _hasEnoughHearts = true;
   String? _selectedTag;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkHearts();
-  }
-
-  Future<void> _checkHearts() async {
-    final canAfford =
-        await HeartCostService().canAfford(widget.service.heartCost);
-    if (mounted) setState(() => _hasEnoughHearts = canAfford);
-  }
 
   Future<void> _draw() async {
     final locale =
         Provider.of<LocaleProvider>(context, listen: false).locale.languageCode;
     final isKorean = locale == 'ko';
-    setState(() => _isLoading = true);
+    final cost = widget.service.heartCost;
+
     try {
-      final item = await widget.service.drawWithHearts(
-        tagFilter: _selectedTag,
+      final ok = await confirmLoveSpend(
+        context,
+        isKorean: isKorean,
+        categoryId: widget.service.categoryId,
+        title: isKorean ? widget.titleKo : widget.titleEn,
+        subtitle: isKorean ? widget.ctaKo : widget.ctaEn,
+        cost: cost,
       );
-      if (mounted) {
-        setState(() {
-          _todayResult = item;
-          _isLoading = false;
-        });
-        _checkHearts();
-      }
+      if (!ok || !mounted) return;
+
+      setState(() => _isLoading = true);
+      final item = await widget.service.drawWithHearts(tagFilter: _selectedTag);
+      if (!mounted) return;
+      setState(() {
+        _todayResult = item;
+        _isLoading = false;
+      });
+      await showSpentToast(context, cost, isKorean);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      final msg = e.toString();
-      String text;
-      if (msg.contains('INSUFFICIENT_HEARTS')) {
-        text = isKorean ? '하트가 부족해요.' : 'Insufficient hearts.';
-      } else if (msg.contains('NOT_LOGGED_IN')) {
-        text = isKorean ? '로그인이 필요합니다.' : 'Please sign in first.';
-      } else {
-        text = isKorean
-            ? '잠시 문제가 생겼어요. 다시 시도해 주세요.'
-            : 'Something went wrong. Please try again.';
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(text)),
-      );
+      showShopError(context, e, isKorean);
     }
   }
 
@@ -94,52 +82,64 @@ class _CatalogTabScreenState extends State<CatalogTabScreen> {
   Widget build(BuildContext context) {
     final isKorean =
         Provider.of<LocaleProvider>(context).locale.languageCode == 'ko';
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
+    final cost = widget.service.heartCost;
+    final result = _todayResult;
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.grey[900]!, Colors.grey[850]!],
-              )
-            : LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: widget.lightGradient,
-              ),
-      ),
+    return ColoredBox(
+      color: t.ground,
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '${widget.iconEmoji} ${isKorean ? widget.titleKo : widget.titleEn}',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isKorean ? widget.titleKo : widget.titleEn,
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: t.ink,
+                      ),
                     ),
-                textAlign: TextAlign.center,
+                  ),
+                  LovePriceTag(cost: cost, isKorean: isKorean),
+                ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               if (widget.filterTags != null) ...[
                 Wrap(
                   spacing: 8,
+                  runSpacing: 8,
                   children: List.generate(widget.filterTags!.length, (i) {
                     final tag = widget.filterTags![i];
                     final label = isKorean
                         ? widget.filterLabelsKo![i]
                         : widget.filterLabelsEn![i];
                     final selected = _selectedTag == tag;
-                    return FilterChip(
+                    return ChoiceChip(
                       label: Text(label),
                       selected: selected,
+                      showCheckmark: false,
+                      labelStyle: TextStyle(
+                        fontSize: 14,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected ? t.coralDeep : t.ink,
+                      ),
+                      backgroundColor: t.surface,
+                      selectedColor: t.coralSoft,
+                      side: BorderSide(
+                        color: selected ? t.coralDeep : t.line,
+                        width: selected ? 1.5 : 1,
+                      ),
+                      shape: const StadiumBorder(),
+                      materialTapTargetSize: MaterialTapTargetSize.padded,
                       onSelected: (_) {
-                        setState(() {
-                          _selectedTag = selected ? null : tag;
-                        });
+                        setState(() => _selectedTag = selected ? null : tag);
                       },
                     );
                   }),
@@ -147,38 +147,33 @@ class _CatalogTabScreenState extends State<CatalogTabScreen> {
                 const SizedBox(height: 12),
               ],
               Expanded(
-                child: _todayResult == null
+                child: result == null
                     ? Center(
-                        child: Text(
-                          isKorean
-                              ? '하트 1개로 오늘의 행복을 받아보세요.'
-                              : 'Get today\'s happiness with 1 heart.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isDarkMode ? Colors.white70 : Colors.black54,
-                          ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ShopArt.pill(widget.service.categoryId,
+                                size: 96, radius: 24),
+                            const SizedBox(height: 16),
+                            Text(
+                              isKorean
+                                  ? '사랑하기 $cost개로 오늘의 행복을 받아 보세요.'
+                                  : "Get today's happiness for $cost Love.",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 15, color: t.ink2),
+                            ),
+                          ],
                         ),
                       )
-                    : _ResultCard(item: _todayResult!, isKorean: isKorean),
+                    : _ResultCard(item: result, isKorean: isKorean),
               ),
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: LinearProgressIndicator(),
-                ),
-              ElevatedButton(
-                onPressed: _isLoading || !_hasEnoughHearts ? null : _draw,
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  isKorean
-                      ? '${widget.ctaKo} (하트 ${widget.service.heartCost}개)'
-                      : '${widget.ctaEn} (${widget.service.heartCost} Hearts)',
-                ),
+              const SizedBox(height: 12),
+              LoveButton(
+                isLoading: _isLoading,
+                onPressed: _draw,
+                label: isKorean
+                    ? '사랑하기 $cost개로 ${widget.ctaKo}'
+                    : '${widget.ctaEn} for $cost Love',
               ),
             ],
           ),
@@ -196,32 +191,47 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+    final t = ShopTokens.of(context);
+    final subtitle = item.subtitle(isKorean);
+    return Container(
+      decoration: BoxDecoration(
+        color: t.surface,
+        border: Border.all(color: t.line),
+        borderRadius: BorderRadius.circular(ShopShape.card),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               item.title(isKorean),
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: t.ink,
+              ),
             ),
-            if (item.subtitle(isKorean) != null) ...[
+            if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(
-                item.subtitle(isKorean)!,
+                subtitle,
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: t.coralDeep,
                 ),
               ),
             ],
             const SizedBox(height: 12),
             Text(
               item.body(isKorean),
-              style: const TextStyle(fontSize: 16, height: 1.6),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                height: 1.7,
+                color: t.ink,
+              ),
             ),
           ],
         ),

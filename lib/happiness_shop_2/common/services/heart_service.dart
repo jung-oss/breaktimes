@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/heart_info.dart';
+import 'love_ledger.dart';
 
 /// 하트를 주는 활동
 enum HeartReward {
@@ -13,6 +14,10 @@ enum HeartReward {
 
   const HeartReward(this.key);
   final String key;
+
+  /// 사랑하기 기록에 남길 이유
+  LoveReason get ledgerReason =>
+      this == HeartReward.mission ? LoveReason.mission : LoveReason.happyBox;
 }
 
 /// 하트 관리 공통 서비스
@@ -39,9 +44,12 @@ class HeartService {
   }
 
   /// 하트 사용
-  Future<bool> useHearts(int amount) async {
+  Future<bool> useHearts(int amount,
+      {LoveReason reason = LoveReason.other}) async {
+    LoveLedgerEntry? spent;
     try {
-      return await _firestore.runTransaction<bool>((transaction) async {
+      final ok = await _firestore.runTransaction<bool>((transaction) async {
+        spent = null;
         final userRef = _firestore.collection('users').doc(userId);
         final userDoc = await transaction.get(userRef);
 
@@ -59,9 +67,20 @@ class HeartService {
           'heartCount': currentHearts - amount,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        final entry = LoveLedgerEntry(
+          isEarn: false,
+          amount: amount,
+          reason: reason,
+          balanceAfter: (currentHearts as num).toInt() - amount,
+        );
+        LoveLedger.write(transaction, _firestore, userId, entry);
+        spent = entry;
 
         return true;
       });
+      final entry = spent;
+      if (ok && entry != null) LoveLedger.track(entry);
+      return ok;
     } catch (e) {
       return false;
     }
@@ -78,8 +97,10 @@ class HeartService {
     final today =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
+    LoveLedgerEntry? earned;
     try {
-      return await _firestore.runTransaction<bool>((transaction) async {
+      final ok = await _firestore.runTransaction<bool>((transaction) async {
+        earned = null;
         final userRef = _firestore.collection('users').doc(userId);
         final userDoc = await transaction.get(userRef);
         if (!userDoc.exists) return false;
@@ -94,8 +115,21 @@ class HeartService {
           'heartRewards.${reason.key}': today,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        final hearts =
+            (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
+        final entry = LoveLedgerEntry(
+          isEarn: true,
+          amount: 1,
+          reason: reason.ledgerReason,
+          balanceAfter: hearts + 1,
+        );
+        LoveLedger.write(transaction, _firestore, userId, entry);
+        earned = entry;
         return true;
       });
+      final entry = earned;
+      if (ok && entry != null) LoveLedger.track(entry);
+      return ok;
     } catch (e) {
       return false;
     }

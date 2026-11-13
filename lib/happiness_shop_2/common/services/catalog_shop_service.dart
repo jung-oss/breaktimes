@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/shop_catalog_item.dart';
-import '../services/heart_cost_service.dart';
+import 'love_ledger.dart';
 
 /// Firestore 카탈로그 + 로컬 폴백으로 콘텐츠 제공
 class CatalogShopService {
@@ -12,7 +12,6 @@ class CatalogShopService {
   final int heartCost;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final HeartCostService _heartCostService = HeartCostService();
   static final Random _random = Random();
 
   String get userId => _auth.currentUser?.uid ?? '';
@@ -49,37 +48,56 @@ class CatalogShopService {
   Future<ShopCatalogItem?> drawWithHearts({String? tagFilter}) async {
     if (userId.isEmpty) throw Exception('NOT_LOGGED_IN');
 
-    final success = await _heartCostService.checkAndSpendHearts(heartCost);
-    if (!success) throw Exception('INSUFFICIENT_HEARTS');
-
+    // 1. 먼저 카드를 고릅니다(사랑하기는 아직 빼지 않음)
     var catalog = await loadCatalog();
     if (tagFilter != null && tagFilter.isNotEmpty) {
-      catalog = catalog
-          .where((item) => item.tags.contains(tagFilter))
-          .toList();
-      if (catalog.isEmpty) catalog = await loadCatalog();
+      final filtered =
+          catalog.where((item) => item.tags.contains(tagFilter)).toList();
+      if (filtered.isNotEmpty) catalog = filtered;
     }
+    if (catalog.isEmpty) throw Exception('CATALOG_EMPTY');
 
     final picked = catalog[_random.nextInt(catalog.length)];
-    await _saveUserPick(picked);
-    return picked;
-  }
 
-  Future<void> _saveUserPick(ShopCatalogItem item) async {
+    // 2. 사랑하기 차감과 뽑은 카드 저장을 한 번에 처리합니다.
+    //    둘 중 하나라도 실패하면 둘 다 되지 않습니다.
+    final userRef = _firestore.collection('users').doc(userId);
+    final pickRef = userRef.collection('${categoryId}_picks').doc();
+    LoveLedgerEntry? spent;
     try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('${categoryId}_picks')
-          .add({
-        'catalogId': item.id,
-        'titleKo': item.titleKo,
-        'titleEn': item.titleEn,
-        'bodyKo': item.bodyKo,
-        'bodyEn': item.bodyEn,
-        'createdAt': FieldValue.serverTimestamp(),
+      await _firestore.runTransaction((transaction) async {
+        spent = null;
+        final userDoc = await transaction.get(userRef);
+        final hearts = (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
+        if (hearts < heartCost) throw Exception('INSUFFICIENT_HEARTS');
+        final entry = LoveLedgerEntry(
+          isEarn: false,
+          amount: heartCost,
+          reason: LoveReason.fromCategoryId(categoryId),
+          balanceAfter: hearts - heartCost,
+          itemPath: pickRef.path,
+        );
+        LoveLedger.write(transaction, _firestore, userId, entry);
+        spent = entry;
+        transaction.update(userRef, {
+          'heartCount': hearts - heartCost,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        transaction.set(pickRef, {
+          'catalogId': picked.id,
+          'titleKo': picked.titleKo,
+          'titleEn': picked.titleEn,
+          'bodyKo': picked.bodyKo,
+          'bodyEn': picked.bodyEn,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
       });
-    } catch (_) {}
+    } on FirebaseException {
+      throw Exception('NETWORK_ERROR');
+    }
+    final entry = spent;
+    if (entry != null) LoveLedger.track(entry);
+    return picked;
   }
 
   Stream<List<Map<String, dynamic>>> getUserPicksStream() {

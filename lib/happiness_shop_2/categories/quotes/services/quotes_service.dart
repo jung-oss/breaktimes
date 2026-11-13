@@ -5,6 +5,8 @@ import 'dart:math';
 import '../models/quote_item.dart';
 import '../../../common/services/gemini_quote_service.dart';
 import '../../../common/services/heart_cost_service.dart';
+import '../../../common/services/shop_charge_service.dart';
+import '../../../common/services/love_ledger.dart';
 import '../../../../services/environment_service.dart';
 
 /// 행복 글귀 서비스
@@ -12,7 +14,7 @@ class QuotesService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GeminiQuoteService _geminiService = GeminiQuoteService();
-  final HeartCostService _heartCostService = HeartCostService();
+  final ShopChargeService _charge = ShopChargeService();
   static final Random _random = Random();
 
   // 한국 작가 목록
@@ -26,60 +28,58 @@ class QuotesService {
 
   String get userId => _auth.currentUser?.uid ?? '';
 
-  /// 오늘의 생각으로 글귀 생성 및 저장 (하트 소진 포함)
+  /// 오늘의 생각으로 글귀를 만듭니다. 사랑하기는 글귀가 나온 뒤에 빠집니다.
   Future<QuoteItem?> createQuoteFromThought(String userThought) async {
+    if (userId.isEmpty) throw Exception('NOT_LOGGED_IN');
+
+    // 1. 사랑하기가 충분한지만 확인합니다(빼지 않음)
+    await _charge.ensureAffordable(HeartCost.QUOTE);
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 2. 문서 생성 (pending 상태)
+    final docRef =
+        _firestore.collection('users').doc(userId).collection('quotes').doc();
+
+    final quoteItem = QuoteItem(
+      id: docRef.id,
+      userId: userId,
+      userThought: userThought,
+      generatedQuote: '',
+      date: today,
+      createdAt: now,
+      updatedAt: now,
+      status: 'pending',
+    );
+
     try {
-      // 1. 하트 소진 가능 여부 확인 및 소진
-      final success =
-          await _heartCostService.checkAndSpendHearts(HeartCost.QUOTE);
-      if (!success) {
-        throw Exception('INSUFFICIENT_HEARTS');
-      }
-
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-
-      // 2. 문서 생성 (pending 상태)
-      final docRef =
-          _firestore.collection('users').doc(userId).collection('quotes').doc();
-
-      final quoteItem = QuoteItem(
-        id: docRef.id,
-        userId: userId,
-        userThought: userThought,
-        generatedQuote: '',
-        date: today,
-        createdAt: now,
-        updatedAt: now,
-        status: 'pending',
-      );
-
-      await docRef.set(quoteItem.toFirestore());
-
-      // 3. 백그라운드에서 AI 글귀 및 작가 위로 메시지 생성
-      _generateQuoteInBackground(docRef.id, userThought, today);
-
-      return quoteItem;
-    } catch (e) {
-      // 하트 부족이 아닌 다른 오류인 경우 하트 롤백은 하지 않음
-      // (이미 소진되었을 수 있으므로)
-      rethrow;
+      await docRef.set({
+        ...quoteItem.toFirestore(),
+        ..._charge.chargeFields(HeartCost.QUOTE, 'ko'),
+      });
+    } on FirebaseException {
+      throw Exception('NETWORK_ERROR');
     }
+
+    // 3. 백그라운드에서 AI 글귀 생성 → 결과 저장과 함께 사랑하기 차감
+    _generateQuoteInBackground(docRef.id, userThought, today);
+
+    return quoteItem;
   }
 
   /// 백그라운드에서 통합된 명언과 위로 글 생성
   Future<void> _generateQuoteInBackground(
       String quoteId, String userThought, DateTime date) async {
+    final docRef = _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('quotes')
+        .doc(quoteId);
+    if (!_charge.begin(quoteId)) return;
     try {
-      final docRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('quotes')
-          .doc(quoteId);
-
       // 1. 통합된 명언과 위로 글 생성 (3~5줄)
-      final comfortMessage =
-          await _geminiService.generateQuote(userThought, date);
+      final result = await _geminiService.generateQuoteResult(userThought, date);
 
       // 2. 랜덤 작가 선택
       final author = _koreanAuthors[_random.nextInt(_koreanAuthors.length)];
@@ -89,27 +89,42 @@ class QuotesService {
         'GEMINI_MODEL_NAME',
         defaultValue: '',
       );
-      await docRef.update({
-        'comfortMessage': comfortMessage,
-        'authorName': author,
-        'status': 'generated',
-        'model': modelName,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      await _charge.complete(
+        docRef,
+        {
+          'comfortMessage': result.text,
+          'authorName': author,
+          'status': 'generated',
+          'model': result.isFallback ? '' : modelName,
+        },
+        isFallback: result.isFallback,
+        reason: LoveReason.quote,
+      );
     } catch (e) {
-      // 실패 시 상태 업데이트
-      try {
-        await _firestore
-            .collection('users')
-            .doc(userId)
-            .collection('quotes')
-            .doc(quoteId)
-            .update({
-          'status': 'failed',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {}
+      await _charge.markFailed(docRef);
+    } finally {
+      _charge.end(quoteId);
     }
+  }
+
+  /// 앱이 꺼져 'pending'에 멈춘 글귀를 이어서 만듭니다.
+  Future<void> resumePending() async {
+    if (userId.isEmpty) return;
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('quotes')
+          .where('status', isEqualTo: 'pending')
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        if (!ShopChargeService.isStalePending(data)) continue;
+        final date = (data['date'] as Timestamp?)?.toDate() ?? DateTime.now();
+        _generateQuoteInBackground(
+            doc.id, data['userThought'] as String? ?? '', date);
+      }
+    } catch (_) {}
   }
 
   /// 사용자의 모든 글귀 가져오기 (Stream)

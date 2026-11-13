@@ -12,6 +12,8 @@ import '../categories/flowers/flowers_category.dart';
 import '../categories/recipe/recipe_category.dart';
 import '../categories/travel/travel_category.dart';
 import '../common/models/base_category.dart';
+import '../common/theme/shop_tokens.dart';
+import '../common/widgets/shop_widgets.dart';
 
 class HappinessShopScreen extends StatefulWidget {
   const HappinessShopScreen({super.key});
@@ -24,7 +26,6 @@ class _HappinessShopScreenState extends State<HappinessShopScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final HeartService _heartService = HeartService();
-  int _heartCount = 0;
   bool _isLoading = true;
 
   // 8개 카테고리
@@ -55,10 +56,9 @@ class _HappinessShopScreenState extends State<HappinessShopScreen>
 
   Future<void> _loadInitialData() async {
     try {
-      final heartInfo = await _heartService.getHeartInfo();
+      await _heartService.getHeartInfo();
       if (mounted) {
         setState(() {
-          _heartCount = heartInfo.heartCount;
           _isLoading = false;
         });
       }
@@ -86,135 +86,62 @@ class _HappinessShopScreenState extends State<HappinessShopScreen>
     final languageCode =
         Provider.of<LocaleProvider>(context).locale.languageCode;
     final isKorean = languageCode == 'ko';
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final t = ShopTokens.of(context);
 
     return Scaffold(
+      backgroundColor: t.ground,
       body: Column(
         children: [
-          // 헤더 (main_screen 스타일 반영)
+          // 탭 줄 + 사랑하기 잔액 칩 (앱 상단바 아래에 머리글을 하나 더 두지 않습니다)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey[900] : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+              color: t.surface,
+              border: Border(bottom: BorderSide(color: t.line)),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 로고 (main_screen 스타일)
-                Row(
-                  children: [
-                    const SizedBox(width: 8),
-                    Image.asset(
-                      'assets/icons/4.png',
-                      width: 32,
-                      height: 32,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.favorite, color: Colors.red);
-                      },
+                Expanded(
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    tabs: _categories.map((category) {
+                      return Tab(
+                        height: 56,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            ShopArt.pill(category.id, size: 28, radius: 8),
+                            const SizedBox(width: 8),
+                            Text(isKorean ? category.nameKo : category.nameEn),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    labelColor: t.ink,
+                    unselectedLabelColor: t.ink2,
+                    indicatorColor: t.coral,
+                    indicatorWeight: 3,
+                    dividerColor: Colors.transparent,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    labelStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
-                    Text(
-                      isKorean ? '내 행복 컬렉션' : 'My Happiness Collection',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: isDarkMode ? Colors.white : Colors.black87,
-                      ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
-                // 하트 표시
-                Row(
-                  children: [
-                    const Icon(Icons.favorite, color: Colors.red),
-                    const SizedBox(width: 4),
-                    StreamBuilder<int>(
-                      stream: _heartService.heartCountStream(),
-                      builder: (context, snapshot) {
-                        final count = snapshot.data ?? _heartCount;
-                        return Text(
-                          count.toString(),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: isDarkMode ? Colors.white : Colors.black87,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Tab bar
-          Container(
-            decoration: BoxDecoration(
-              color: isDarkMode ? Colors.grey.shade900 : Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabs: _categories.map((category) {
-                return Tab(
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        category.icon,
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      const SizedBox(width: 6),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            isKorean ? category.nameKo : category.nameEn,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          Text(
-                            isKorean
-                                ? category.subtitleKo
-                                : category.subtitleEn,
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
-                );
-              }).toList(),
-              labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Colors.grey,
-              indicatorColor: Theme.of(context).colorScheme.primary,
-              indicatorWeight: 3,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              labelStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 12,
-              ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, right: 12),
+                  child: LoveBalanceChip(isKorean: isKorean),
+                ),
+              ],
             ),
           ),
-          // Tab content
+          // 탭 내용
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())

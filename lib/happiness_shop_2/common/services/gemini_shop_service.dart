@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../../services/environment_service.dart';
 import '../../../utils/logger.dart';
+import 'ai_result.dart';
 
 /// 행복상점 AI 생성 공통 서vice (운세·위로 등)
 class GeminiShopService {
@@ -18,7 +19,7 @@ class GeminiShopService {
     );
   }
 
-  Future<String> generateFortune({
+  Future<AiResult> generateFortune({
     required DateTime date,
     required String locale,
     String? mood,
@@ -63,7 +64,7 @@ Lines 4-5: 2-3 lines of encouragement
         : 'May a little luck stay with you today. 🍀');
   }
 
-  Future<String> generateComfort({
+  Future<AiResult> generateComfort({
     required String userMessage,
     required DateTime date,
     required String locale,
@@ -83,7 +84,8 @@ Lines 4-5: 2-3 lines of encouragement
     ];
     final lower = userMessage.toLowerCase();
     if (crisisKeywords.any((k) => lower.contains(k))) {
-      return locale.startsWith('ko')
+      // 위기 안내는 AI를 부르지 않고, 사랑하기도 빼지 않습니다(무료).
+      return AiResult.fallback(locale.startsWith('ko')
           ? '''지금 힘든 마음이 느껴져요.
 혼자 견디지 않아도 됩니다.
 전국 정신건강 위기상담전화 1577-0199 또는 1393(자살예방)으로 연락해 주세요.
@@ -91,7 +93,7 @@ Lines 4-5: 2-3 lines of encouragement
           : '''It sounds like you are going through something very difficult.
 You do not have to face this alone.
 Please reach out to a local crisis helpline or someone you trust right away.
-Your safety matters most.''';
+Your safety matters most.''');
     }
 
     final prompt = locale.startsWith('ko')
@@ -125,27 +127,28 @@ Write a 4-8 line empathetic comfort letter.
         : 'You did enough today. Be gentle with yourself. 💌');
   }
 
-  Future<String> _generate(String prompt, String fallback) async {
+  /// AI 문장을 만듭니다. 실패하면 [fallback]을 기본 문장으로 돌려줍니다(isFallback = true).
+  Future<AiResult> _generate(String prompt, String fallback) async {
     final apiKey = EnvironmentService.instance.get('GEMIN_API_KEY_SHOP');
     if (apiKey.isEmpty) {
       Logger.warn('GeminiShopService: API key missing');
-      return fallback;
+      return AiResult.fallback(fallback);
     }
 
     for (int attempt = 0; attempt < _maxRetries; attempt++) {
       try {
         final response = await _callGeminiAPI(apiKey, prompt);
-        if (response.isNotEmpty) return response;
+        if (response.isNotEmpty) return AiResult.generated(response);
         if (attempt < _maxRetries - 1) {
           await Future.delayed(_retryDelay * (attempt + 1));
         }
       } catch (e) {
         Logger.error('GeminiShopService: attempt ${attempt + 1} failed: $e');
-        if (attempt == _maxRetries - 1) return fallback;
+        if (attempt == _maxRetries - 1) return AiResult.fallback(fallback);
         await Future.delayed(_retryDelay * (attempt + 1));
       }
     }
-    return fallback;
+    return AiResult.fallback(fallback);
   }
 
   Future<String> _callGeminiAPI(String apiKey, String prompt) async {

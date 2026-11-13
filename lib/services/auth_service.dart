@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io' if (dart.library.html) 'dart:html';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
+import '../happiness_shop_2/common/services/love_ledger.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -66,19 +67,33 @@ class AuthService {
 
       final userDoc =
           _firestore.collection('users').doc(_auth.currentUser!.uid);
-      final userData = await userDoc.get();
+      final today = DateTime.now().toIso8601String().split('T')[0];
 
-      if (userData.exists) {
-        final lastHeartDate = userData.data()?['lastHeartDate'];
-        final today = DateTime.now().toIso8601String().split('T')[0];
-
-        if (lastHeartDate != today) {
-          await userDoc.update({
-            'heartCount': FieldValue.increment(1),
-            'lastHeartDate': today,
-          });
-        }
-      }
+      // 확인과 지급을 한 트랜잭션으로 묶어, 동시에 두 번 불려도 하루 1개만 줍니다.
+      LoveLedgerEntry? earned;
+      await _firestore.runTransaction((transaction) async {
+        earned = null;
+        final userData = await transaction.get(userDoc);
+        if (!userData.exists) return;
+        if (userData.data()?['lastHeartDate'] == today) return;
+        transaction.update(userDoc, {
+          'heartCount': FieldValue.increment(1),
+          'lastHeartDate': today,
+        });
+        final hearts =
+            (userData.data()?['heartCount'] as num?)?.toInt() ?? 0;
+        final entry = LoveLedgerEntry(
+          isEarn: true,
+          amount: 1,
+          reason: LoveReason.dailyCheckIn,
+          balanceAfter: hearts + 1,
+        );
+        LoveLedger.write(
+            transaction, _firestore, _auth.currentUser!.uid, entry);
+        earned = entry;
+      });
+      final entry = earned;
+      if (entry != null) LoveLedger.track(entry);
     } catch (e) {
       debugPrint('Heart count increment error: $e');
       rethrow;

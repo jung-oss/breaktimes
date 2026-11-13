@@ -8,7 +8,8 @@ import '../widgets/vitamin_content_type_sheet.dart';
 import 'vitamin_detail_screen.dart';
 import 'vitamin_add_screen.dart';
 import '../../../../providers/locale_provider.dart';
-import '../../../common/services/heart_service.dart';
+import '../../../common/widgets/shop_widgets.dart';
+import '../../../common/theme/shop_tokens.dart';
 
 class VitaminTabScreen extends StatefulWidget {
   final VitaminService service;
@@ -23,8 +24,6 @@ class VitaminTabScreen extends StatefulWidget {
 }
 
 class _VitaminTabScreenState extends State<VitaminTabScreen> {
-  final HeartService _heartService = HeartService();
-  int _heartCount = 0;
   int _slotCount = 0;
   int _maxSlots = 7;
   bool _isLoading = true;
@@ -38,10 +37,8 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
   Future<void> _loadInitialData() async {
     try {
       final slotInfo = await widget.service.getUserSlotInfo();
-      final heartInfo = await _heartService.getHeartInfo();
       if (mounted) {
         setState(() {
-          _heartCount = heartInfo.heartCount;
           _slotCount = slotInfo['slotCount'] ?? 0;
           _maxSlots = slotInfo['maxSlots'] ?? 20;
           _isLoading = false;
@@ -61,72 +58,54 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
     final languageCode = Localizations.localeOf(context).languageCode;
     final isKorean = languageCode == 'ko';
 
-    if (_heartCount < 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(isKorean ? '하트가 부족합니다' : 'Not enough hearts'),
-        ),
-      );
-      return;
-    }
-
     if (_slotCount >= _maxSlots) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isKorean ? '최대 슬롯에 도달했습니다' : 'Maximum slots reached',
-          ),
-        ),
+      showShopToast(
+        context,
+        isKorean
+            ? '슬롯은 최대 $_maxSlots개까지 늘릴 수 있어요.'
+            : 'You can have up to $_maxSlots slots.',
       );
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(isKorean ? '슬롯 추가' : 'Add Slot'),
-        content: Text(
-          isKorean
-              ? '슬롯을 추가하시겠습니까?\n하트 5개 사용'
-              : 'Would you like to add a slot?\n5 hearts will be used',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(isKorean ? '취소' : 'Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(isKorean ? '구매' : 'Purchase'),
-          ),
-        ],
-      ),
-    );
+    final bool confirmed;
+    try {
+      confirmed = await confirmLoveSpend(
+        context,
+        isKorean: isKorean,
+        categoryId: 'vitamin',
+        title: isKorean ? '슬롯을 1개 늘릴까요?' : 'Add one slot?',
+        subtitle: isKorean
+            ? '$_slotCount개 → ${_slotCount + 1}개 · 최대 $_maxSlots개'
+            : '$_slotCount → ${_slotCount + 1} · up to $_maxSlots',
+        cost: VitaminService.SLOT_PRICE,
+        actionLabel: isKorean
+            ? '사랑하기 ${VitaminService.SLOT_PRICE}개로 늘리기'
+            : 'Add for ${VitaminService.SLOT_PRICE} Love',
+        note: isKorean
+            ? '늘린 슬롯은 계속 내 것이에요. 슬롯을 비우거나 다시 채우는 건 무료예요.'
+            : 'Added slots are yours to keep. Filling or clearing slots is free.',
+      );
+    } catch (e) {
+      if (mounted) showShopError(context, e, isKorean);
+      return;
+    }
+    if (!confirmed || !mounted) return;
 
-    if (confirmed == true) {
-      final success = await widget.service.purchaseSlot();
-      if (success) {
-        await _loadInitialData();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isKorean ? '슬롯이 추가되었습니다! 🎉' : 'Slot added! 🎉',
-              ),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                isKorean ? '슬롯 추가에 실패했습니다' : 'Failed to add slot',
-              ),
-            ),
-          );
-        }
+    final success = await widget.service.purchaseSlot();
+    if (!mounted) return;
+    if (success) {
+      await _loadInitialData();
+      if (mounted) {
+        await showSpentToast(context, VitaminService.SLOT_PRICE, isKorean);
       }
+    } else {
+      showShopToast(
+        context,
+        isKorean
+            ? '슬롯을 늘리지 못했어요. 사랑하기는 그대로예요.'
+            : 'Could not add a slot. Your Love was not used.',
+      );
     }
   }
 
@@ -173,26 +152,9 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
     final isKorean = languageCode == 'ko';
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
+    // 디자인 시스템: 가게 바탕은 크림색(어두운 화면은 따뜻한 갈색)
     return Container(
-      decoration: BoxDecoration(
-        gradient: isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.grey[900]!,
-                  Colors.grey[850]!,
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.orange.shade50,
-                  Colors.white,
-                ],
-              ),
-      ),
+      color: ShopTokens.of(context).ground,
       child: Column(
         children: [
           // 서브 헤더
@@ -231,18 +193,11 @@ class _VitaminTabScreenState extends State<VitaminTabScreen> {
           if (_slotCount < _maxSlots)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ElevatedButton.icon(
+              child: LoveButton(
                 onPressed: _purchaseSlot,
-                icon: const Icon(Icons.add),
-                label: Text(
-                  isKorean ? '슬롯 추가하기 (하트 5개)' : 'Add Slot (5 Hearts)',
-                ),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
-                  ),
-                ),
+                label: isKorean
+                    ? '사랑하기 ${VitaminService.SLOT_PRICE}개로 슬롯 늘리기'
+                    : 'Add a slot for ${VitaminService.SLOT_PRICE} Love',
               ),
             ),
           const SizedBox(height: 16),
