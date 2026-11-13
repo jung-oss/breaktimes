@@ -10,6 +10,7 @@ enum LoveReason {
   dailyCheckIn('dailyCheckIn', '매일 서랍 열기', 'Daily check-in'),
   mission('mission', '행복-미션 100%', 'Mission 100%'),
   happyBox('happyBox', '행복-함 작성', 'Happy Box entry'),
+  collectionBonus('collectionBonus', '도감 완성', 'Collection complete'),
 
   // 쓰기
   fortune('fortune', '오늘의 운세', "Today's fortune"),

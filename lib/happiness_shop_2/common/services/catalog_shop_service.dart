@@ -1,10 +1,55 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../data/catalog_seed.dart';
 import '../models/shop_catalog_item.dart';
 import 'love_ledger.dart';
 
-/// Firestore 카탈로그 + 로컬 폴백으로 콘텐츠 제공
+/// 도감 한 묶음의 진행 상황
+class CollectionSetProgress {
+  const CollectionSetProgress({
+    required this.setId,
+    required this.items,
+    required this.ownedIds,
+    required this.bonusClaimed,
+  });
+
+  final String setId;
+
+  /// 묶음의 카드(순서대로)
+  final List<ShopCatalogItem> items;
+  final Set<String> ownedIds;
+  final bool bonusClaimed;
+
+  int get ownedCount => items.where((i) => ownedIds.contains(i.id)).length;
+  bool get isComplete => items.isNotEmpty && ownedCount == items.length;
+  String name(bool isKorean) =>
+      items.isEmpty ? '' : items.first.setName(isKorean);
+}
+
+/// 카드를 고른 결과
+class CollectResult {
+  const CollectResult({
+    required this.item,
+    required this.balanceAfter,
+    this.completedSet,
+    this.bonusGranted = false,
+  });
+
+  final ShopCatalogItem item;
+  final int balanceAfter;
+
+  /// 이번 카드로 완성한 묶음(없으면 null)
+  final CollectionSetProgress? completedSet;
+
+  /// 완성 보너스를 받았는지
+  final bool bonusGranted;
+}
+
+/// 카탈로그 + 도감 (음악·꽃말·레시피·여행)
+///
+/// 흐름: 아직 없는 카드 3장을 보여 줌 → 사용자가 1장을 고름 →
+/// 사랑하기 차감·도감 저장·기록을 한 트랜잭션으로 → 묶음을 다 모으면 보너스.
 class CatalogShopService {
   CatalogShopService(this.categoryId, this.heartCost);
 
@@ -14,8 +59,25 @@ class CatalogShopService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   static final Random _random = Random();
 
+  /// 묶음 완성 보너스(기획안 5.2)
+  static const int setBonus = 3;
+
+  /// 한 번에 보여 주는 후보 수
+  static const int choiceCount = 3;
+
   String get userId => _auth.currentUser?.uid ?? '';
 
+  DocumentReference<Map<String, dynamic>> get _userRef =>
+      _firestore.collection('users').doc(userId);
+
+  CollectionReference<Map<String, dynamic>> get _collection =>
+      _userRef.collection('collection');
+
+  String _collectionDocId(String itemId) => '${categoryId}__$itemId';
+
+  String _bonusKey(String setId) => '${categoryId}__$setId';
+
+  /// 카탈로그: Firestore에 있으면 그것을, 없으면 앱 안 초안 목록을 씁니다.
   Future<List<ShopCatalogItem>> loadCatalog() async {
     try {
       final snapshot = await _firestore
@@ -25,14 +87,15 @@ class CatalogShopService {
           .where('isActive', isEqualTo: true)
           .get();
       if (snapshot.docs.isNotEmpty) {
-        return snapshot.docs.map(_fromDoc).toList();
+        return snapshot.docs.map(_fromDoc).toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
       }
     } catch (_) {}
-    return _fallbackItems();
+    return catalogSeed[categoryId] ?? const [];
   }
 
-  ShopCatalogItem _fromDoc(QueryDocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  ShopCatalogItem _fromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data();
     return ShopCatalogItem(
       id: doc.id,
       titleKo: data['titleKo'] ?? '',
@@ -42,154 +105,183 @@ class CatalogShopService {
       subtitleKo: data['subtitleKo'],
       subtitleEn: data['subtitleEn'],
       tags: List<String>.from(data['tags'] ?? []),
+      setId: data['setId'] ?? 'default',
+      setNameKo: data['setNameKo'] ?? '기본 도감',
+      setNameEn: data['setNameEn'] ?? 'Collection',
+      order: (data['order'] as num?)?.toInt() ?? 0,
     );
   }
 
-  Future<ShopCatalogItem?> drawWithHearts({String? tagFilter}) async {
+  /// 이 카테고리에서 이미 모은 카드 ID
+  ///
+  /// 도감 이전에 받은 카드(`{category}_picks`)도 모은 것으로 셉니다.
+  Future<Set<String>> loadOwnedIds() async {
+    if (userId.isEmpty) return {};
+    final owned = <String>{};
+    final collected =
+        await _collection.where('categoryId', isEqualTo: categoryId).get();
+    for (final doc in collected.docs) {
+      final id = doc.data()['catalogId'];
+      if (id is String) owned.add(id);
+    }
+    try {
+      final legacy = await _userRef.collection('${categoryId}_picks').get();
+      for (final doc in legacy.docs) {
+        final id = doc.data()['catalogId'];
+        if (id is String) owned.add(id);
+      }
+    } catch (_) {}
+    return owned;
+  }
+
+  /// 완성 보너스를 받은 묶음 키
+  Future<Set<String>> _loadClaimedBonuses() async {
+    final user = await _userRef.get();
+    final bonuses = user.data()?['collectionBonuses'];
+    return bonuses is Map ? bonuses.keys.cast<String>().toSet() : {};
+  }
+
+  /// 묶음별 진행 상황
+  Future<List<CollectionSetProgress>> loadProgress() async {
+    final catalog = await loadCatalog();
+    final owned = await loadOwnedIds();
+    final claimed = await _loadClaimedBonuses();
+    final bySet = <String, List<ShopCatalogItem>>{};
+    for (final item in catalog) {
+      bySet.putIfAbsent(item.setId, () => []).add(item);
+    }
+    return [
+      for (final entry in bySet.entries)
+        CollectionSetProgress(
+          setId: entry.key,
+          items: entry.value..sort((a, b) => a.order.compareTo(b.order)),
+          ownedIds: owned,
+          bonusClaimed: claimed.contains(_bonusKey(entry.key)),
+        ),
+    ];
+  }
+
+  /// 아직 없는 카드 중 [choiceCount]장. [tagFilter]에 맞는 카드가 있으면 그중에서 고릅니다.
+  /// 모두 모았으면 빈 목록입니다.
+  Future<List<ShopCatalogItem>> loadChoices({String? tagFilter}) async {
+    final catalog = await loadCatalog();
+    final owned = await loadOwnedIds();
+    var pool = catalog.where((i) => !owned.contains(i.id)).toList();
+    if (tagFilter != null && tagFilter.isNotEmpty) {
+      final filtered = pool.where((i) => i.tags.contains(tagFilter)).toList();
+      if (filtered.isNotEmpty) pool = filtered;
+    }
+    pool.shuffle(_random);
+    return pool.take(choiceCount).toList();
+  }
+
+  /// 고른 카드를 도감에 넣습니다. 사랑하기 차감·도감 저장·기록을 한 번에 처리합니다.
+  ///
+  /// 이미 가진 카드면 ALREADY_OWNED, 부족하면 INSUFFICIENT_HEARTS,
+  /// 연결 문제면 NETWORK_ERROR 예외를 던집니다.
+  Future<CollectResult> collect(ShopCatalogItem item) async {
     if (userId.isEmpty) throw Exception('NOT_LOGGED_IN');
 
-    // 1. 먼저 카드를 고릅니다(사랑하기는 아직 빼지 않음)
-    var catalog = await loadCatalog();
-    if (tagFilter != null && tagFilter.isNotEmpty) {
-      final filtered =
-          catalog.where((item) => item.tags.contains(tagFilter)).toList();
-      if (filtered.isNotEmpty) catalog = filtered;
-    }
-    if (catalog.isEmpty) throw Exception('CATALOG_EMPTY');
-
-    final picked = catalog[_random.nextInt(catalog.length)];
-
-    // 2. 사랑하기 차감과 뽑은 카드 저장을 한 번에 처리합니다.
-    //    둘 중 하나라도 실패하면 둘 다 되지 않습니다.
-    final userRef = _firestore.collection('users').doc(userId);
-    final pickRef = userRef.collection('${categoryId}_picks').doc();
+    final docRef = _collection.doc(_collectionDocId(item.id));
     LoveLedgerEntry? spent;
     try {
       await _firestore.runTransaction((transaction) async {
         spent = null;
-        final userDoc = await transaction.get(userRef);
+        final existing = await transaction.get(docRef);
+        if (existing.exists) throw Exception('ALREADY_OWNED');
+        final userDoc = await transaction.get(_userRef);
         final hearts = (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
         if (hearts < heartCost) throw Exception('INSUFFICIENT_HEARTS');
+
+        transaction.update(_userRef, {
+          'heartCount': hearts - heartCost,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        transaction.set(docRef, {
+          ...item.toCollectionMap(categoryId),
+          'collectedAt': FieldValue.serverTimestamp(),
+        });
         final entry = LoveLedgerEntry(
           isEarn: false,
           amount: heartCost,
           reason: LoveReason.fromCategoryId(categoryId),
           balanceAfter: hearts - heartCost,
-          itemPath: pickRef.path,
+          itemPath: docRef.path,
         );
         LoveLedger.write(transaction, _firestore, userId, entry);
         spent = entry;
-        transaction.update(userRef, {
-          'heartCount': hearts - heartCost,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        transaction.set(pickRef, {
-          'catalogId': picked.id,
-          'titleKo': picked.titleKo,
-          'titleEn': picked.titleEn,
-          'bodyKo': picked.bodyKo,
-          'bodyEn': picked.bodyEn,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
       });
     } on FirebaseException {
       throw Exception('NETWORK_ERROR');
     }
-    final entry = spent;
-    if (entry != null) LoveLedger.track(entry);
-    return picked;
-  }
+    final entry = spent!;
+    LoveLedger.track(entry);
 
-  Stream<List<Map<String, dynamic>>> getUserPicksStream() {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('${categoryId}_picks')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
-  }
-
-  List<ShopCatalogItem> _fallbackItems() {
-    switch (categoryId) {
-      case 'music':
-        return const [
-          ShopCatalogItem(
-            id: 'music_calm_1',
-            titleKo: '고요한 아침',
-            titleEn: 'Quiet Morning',
-            bodyKo: '잔잔한 피아노 선율로 하루를 부드럽게 시작해 보세요.',
-            bodyEn: 'Start your day gently with a calm piano melody.',
-            tags: ['calm', 'morning'],
-          ),
-          ShopCatalogItem(
-            id: 'music_hope_1',
-            titleKo: '작은 응원',
-            titleEn: 'Little Cheer',
-            bodyKo: '지친 마음에 작은 박수를 더하는 따뜻한 멜로디입니다.',
-            bodyEn: 'A warm melody that adds a small cheer to tired hearts.',
-            tags: ['hope', 'cheer'],
-          ),
-        ];
-      case 'flowers':
-        return const [
-          ShopCatalogItem(
-            id: 'flower_sunflower',
-            titleKo: '해바라기',
-            titleEn: 'Sunflower',
-            bodyKo: '당신은 충분히 빛나고 있어요.',
-            bodyEn: 'You are already shining brightly.',
-            subtitleKo: '기다림, 존경',
-            subtitleEn: 'Adoration, loyalty',
-            tags: ['bright'],
-          ),
-          ShopCatalogItem(
-            id: 'flower_lavender',
-            titleKo: '라벤더',
-            titleEn: 'Lavender',
-            bodyKo: '오늘은 마음을 천천히 쉬게 해도 괜찮아요.',
-            bodyEn: 'It is okay to let your heart rest slowly today.',
-            subtitleKo: '평온, 치유',
-            subtitleEn: 'Calm, healing',
-            tags: ['calm'],
-          ),
-        ];
-      case 'recipe':
-        return const [
-          ShopCatalogItem(
-            id: 'recipe_tomato_egg',
-            titleKo: '토마토 계란볶음',
-            titleEn: 'Tomato Egg Stir-fry',
-            bodyKo: '10분 · 쉬움\n재료: 계란 2개, 토마토 1개, 소금\n1. 계란을 익힌다\n2. 토마토를 넣고 볶는다\n3. 소금으로 간한다',
-            bodyEn: '10 min · Easy\nEggs, tomato, salt\n1. Scramble eggs\n2. Add tomato\n3. Season',
-            tags: ['quick', 'warm'],
-          ),
-        ];
-      case 'travel':
-        return const [
-          ShopCatalogItem(
-            id: 'travel_walk',
-            titleKo: '근처 산책로',
-            titleEn: 'Nearby Walk',
-            bodyKo: '15분만 걸어도 마음이 조금 가벼워질 수 있어요.',
-            bodyEn: 'Even a 15-minute walk can lighten your mood.',
-            subtitleKo: '근처 산책',
-            subtitleEn: 'Local walk',
-            tags: ['walk'],
-          ),
-          ShopCatalogItem(
-            id: 'travel_imagine',
-            titleKo: '바닷가 상상 여행',
-            titleEn: 'Imaginary Beach',
-            bodyKo: '눈을 감고 파도 소리를 상상해 보세요. 잠깐의 휴식이면 충분해요.',
-            bodyEn: 'Close your eyes and imagine ocean waves. A short break is enough.',
-            subtitleKo: '상상 여행',
-            subtitleEn: 'Imaginary trip',
-            tags: ['imagine'],
-          ),
-        ];
-      default:
-        return const [];
+    // 이번 카드로 묶음을 완성했는지 확인하고 보너스를 받습니다.
+    CollectionSetProgress? completed;
+    var bonusGranted = false;
+    var balance = entry.balanceAfter;
+    try {
+      final progress = await loadProgress();
+      for (final set in progress) {
+        if (set.setId == item.setId && set.isComplete) {
+          completed = set;
+          if (!set.bonusClaimed) {
+            final after = await _claimSetBonus(set.setId);
+            if (after != null) {
+              bonusGranted = true;
+              balance = after;
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // 보너스 확인에 실패해도 카드는 이미 도감에 들어갔습니다.
     }
+
+    return CollectResult(
+      item: item,
+      balanceAfter: balance,
+      completedSet: completed,
+      bonusGranted: bonusGranted,
+    );
+  }
+
+  /// 묶음 완성 보너스(+[setBonus]). 이미 받았거나 실패하면 null, 받으면 받은 뒤 잔액.
+  Future<int?> _claimSetBonus(String setId) async {
+    final key = _bonusKey(setId);
+    final now = DateTime.now();
+    final today =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    LoveLedgerEntry? earned;
+    try {
+      await _firestore.runTransaction((transaction) async {
+        earned = null;
+        final userDoc = await transaction.get(_userRef);
+        final bonuses = userDoc.data()?['collectionBonuses'];
+        if (bonuses is Map && bonuses.containsKey(key)) return;
+        final hearts = (userDoc.data()?['heartCount'] as num?)?.toInt() ?? 0;
+        transaction.update(_userRef, {
+          'heartCount': FieldValue.increment(setBonus),
+          'collectionBonuses.$key': today,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        final entry = LoveLedgerEntry(
+          isEarn: true,
+          amount: setBonus,
+          reason: LoveReason.collectionBonus,
+          balanceAfter: hearts + setBonus,
+        );
+        LoveLedger.write(transaction, _firestore, userId, entry);
+        earned = entry;
+      });
+    } catch (_) {
+      // 보안 규칙이 아직 보너스를 허용하지 않으면 여기로 옵니다.
+      return null;
+    }
+    final entry = earned;
+    if (entry == null) return null;
+    LoveLedger.track(entry);
+    return entry.balanceAfter;
   }
 }

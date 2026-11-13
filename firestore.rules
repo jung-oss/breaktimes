@@ -55,6 +55,34 @@ service cloud.firestore {
         || markMovedForward(oldRewards.get('happyBox', null), newRewards.get('happyBox', null));
     }
 
+    // 보상 날짜 표시는 지우거나 뒤로 돌릴 수 없습니다.
+    // (지웠다가 다시 써서 같은 날 보상을 또 받는 것을 막습니다 — 2026-11-13 추가)
+    function markNotRewound(oldValue, newValue) {
+      return oldValue == null || (newValue is string && newValue >= oldValue);
+    }
+
+    function rewardMarksKept(before, after) {
+      let oldRewards = before.get('heartRewards', {});
+      let newRewards = after.get('heartRewards', {});
+      return markNotRewound(before.get('lastHeartDate', null), after.get('lastHeartDate', null))
+        && markNotRewound(oldRewards.get('mission', null), newRewards.get('mission', null))
+        && markNotRewound(oldRewards.get('happyBox', null), newRewards.get('happyBox', null));
+    }
+
+    // 도감 완성 표시(collectionBonuses)는 늘기만 합니다(지우거나 바꿀 수 없음).
+    function bonusesOnlyGrow(before, after) {
+      let changes = after.get('collectionBonuses', {}).diff(before.get('collectionBonuses', {}));
+      return changes.removedKeys().size() == 0 && changes.changedKeys().size() == 0;
+    }
+
+    // 도감 완성 보너스 +3: 완성 표시가 정확히 하나 새로 생겨야 합니다(평생 30묶음까지).
+    // 앱이 완성 여부를 판단하므로, 정확한 확인은 서버 함수 단계에서 합니다.
+    function collectionBonusAdded(before, after) {
+      let newBonuses = after.get('collectionBonuses', {});
+      let changes = newBonuses.diff(before.get('collectionBonuses', {}));
+      return changes.addedKeys().size() == 1 && newBonuses.size() <= 30;
+    }
+
     // 사랑하기·슬롯·역할 필드를 바꾸는 방법이 올바른지
     function heartFieldsValid(before, after) {
       let oldHearts = before.get('heartCount', 0);
@@ -66,6 +94,8 @@ service cloud.firestore {
         && after.get('maxSlots', 20) == maxSlots
         && newHearts is number
         && newHearts >= 0
+        && rewardMarksKept(before, after)
+        && bonusesOnlyGrow(before, after)
         && (
           // 그대로
           (newHearts == oldHearts && newSlots == oldSlots)
@@ -76,6 +106,9 @@ service cloud.firestore {
           // 하루 보상 +1
           || (newHearts == oldHearts + 1 && newSlots == oldSlots
               && dailyRewardMarkChanged(before, after))
+          // 도감 묶음 완성 보너스 +3
+          || (newHearts == oldHearts + 3 && newSlots == oldSlots
+              && collectionBonusAdded(before, after))
         );
     }
 
